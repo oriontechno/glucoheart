@@ -12,12 +12,14 @@ export default async function UsersListingPage({}: UsersListingPage) {
   const search = searchParamsCache.get('name');
   const pageLimit = searchParamsCache.get('perPage');
   const categories = searchParamsCache.get('category');
+  const sort = searchParamsCache.get('sort');
 
   const filters = {
     page,
     limit: pageLimit,
     ...(search && { search }),
-    ...(categories && { categories: categories })
+    ...(categories && { categories: categories }),
+    ...(sort && { sort })
   };
 
   const data = await fakeUsers.getUsers(filters);

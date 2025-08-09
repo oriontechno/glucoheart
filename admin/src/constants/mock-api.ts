@@ -213,7 +213,7 @@ export const fakeUsers = {
     // Search functionality across multiple fields
     if (search) {
       users = matchSorter(users, search, {
-        keys: ['name', 'email', 'username', 'role']
+        keys: ['name', 'email', 'role']
       });
     }
 
@@ -225,19 +225,66 @@ export const fakeUsers = {
     page = 1,
     limit = 10,
     roles,
-    search
+    search,
+    sort
   }: {
     page?: number;
     limit?: number;
     roles?: string;
     search?: string;
+    sort?: string;
   }) {
     await delay(1000);
     const rolesArray = roles ? roles.split('.') : [];
-    const allUsers = await this.getAll({
+    let allUsers = await this.getAll({
       roles: rolesArray,
       search
     });
+
+    // Handle sorting
+    if (sort) {
+      try {
+        const sortingParams = JSON.parse(sort);
+        if (Array.isArray(sortingParams) && sortingParams.length > 0) {
+          allUsers.sort((a, b) => {
+            for (const sortParam of sortingParams) {
+              const { id, desc } = sortParam;
+              const aValue = a[id as keyof User];
+              const bValue = b[id as keyof User];
+
+              if (aValue === null || aValue === undefined) return desc ? -1 : 1;
+              if (bValue === null || bValue === undefined) return desc ? 1 : -1;
+
+              let comparison = 0;
+              if (typeof aValue === 'string' && typeof bValue === 'string') {
+                // Special handling for date strings
+                if (id === 'created_at') {
+                  const aDate = new Date(aValue);
+                  const bDate = new Date(bValue);
+                  comparison = aDate.getTime() - bDate.getTime();
+                } else {
+                  comparison = aValue.localeCompare(bValue);
+                }
+              } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+                comparison = aValue - bValue;
+              } else if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+                comparison = Number(aValue) - Number(bValue);
+              } else {
+                comparison = String(aValue).localeCompare(String(bValue));
+              }
+
+              if (comparison !== 0) {
+                return desc ? -comparison : comparison;
+              }
+            }
+            return 0;
+          });
+        }
+      } catch (error) {
+        console.warn('Invalid sort parameter:', sort);
+      }
+    }
+
     const totalUsers = allUsers.length;
 
     // Pagination logic

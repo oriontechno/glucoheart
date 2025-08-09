@@ -5,7 +5,7 @@ import { Column, ColumnDef } from '@tanstack/react-table';
 import { CheckCircle2, Text, XCircle } from 'lucide-react';
 import Image from 'next/image';
 import { CellAction } from './cell-action';
-import { CATEGORY_OPTIONS } from './options';
+import { ROLE_OPTIONS } from './options';
 import { User } from '@/constants/mock-api';
 
 export const columns: ColumnDef<User>[] = [
@@ -22,7 +22,8 @@ export const columns: ColumnDef<User>[] = [
       variant: 'text',
       icon: Text
     },
-    enableColumnFilter: true
+    enableColumnFilter: true,
+    enableSorting: true
   },
   {
     id: 'email',
@@ -37,7 +38,8 @@ export const columns: ColumnDef<User>[] = [
       variant: 'text',
       icon: Text
     },
-    enableColumnFilter: true
+    enableColumnFilter: true,
+    enableSorting: true
   },
   {
     id: 'role',
@@ -57,24 +59,30 @@ export const columns: ColumnDef<User>[] = [
       );
     },
     enableColumnFilter: true,
+    enableSorting: true,
     meta: {
       label: 'roles',
       variant: 'multiSelect',
-      options: CATEGORY_OPTIONS
+      options: ROLE_OPTIONS
     }
   },
   {
     accessorKey: 'is_active',
-    header: 'Active',
+    header: ({ column }: { column: Column<User, unknown> }) => (
+      <DataTableColumnHeader column={column} title='Active' />
+    ),
     enableSorting: true,
     cell: ({ row }) => {
       const isActive = row.getValue('is_active');
-      return <div>{isActive ? <Badge variant='destructive' >Active</Badge> : <Badge>Inactive</Badge>}</div>;
+      return <div>{isActive ? <Badge variant='destructive'>Active</Badge> : <Badge>Inactive</Badge>}</div>;
     },
   },
   {
     accessorKey: 'created_at',
-    header: 'Created At',
+    header: ({ column }: { column: Column<User, unknown> }) => (
+      <DataTableColumnHeader column={column} title='Created At' />
+    ),
+    enableSorting: true,
     cell: ({ row }) => {
       const createdAt = row.getValue('created_at');
       return (
