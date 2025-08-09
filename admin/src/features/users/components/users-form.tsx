@@ -20,7 +20,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Product } from '@/constants/mock-api';
+import { Product, User } from '@/constants/mock-api';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -34,39 +34,30 @@ const ACCEPTED_IMAGE_TYPES = [
 ];
 
 const formSchema = z.object({
-  image: z
-    .any()
-    .refine((files) => files?.length == 1, 'Image is required.')
-    .refine(
-      (files) => files?.[0]?.size <= MAX_FILE_SIZE,
-      `Max file size is 5MB.`
-    )
-    .refine(
-      (files) => ACCEPTED_IMAGE_TYPES.includes(files?.[0]?.type),
-      '.jpg, .jpeg, .png and .webp files are accepted.'
-    ),
   name: z.string().min(2, {
-    message: 'Product name must be at least 2 characters.'
+    message: 'User name must be at least 2 characters.'
   }),
-  category: z.string(),
-  price: z.number(),
-  description: z.string().min(10, {
-    message: 'Description must be at least 10 characters.'
-  })
+  email: z.string().email({
+    message: 'Please enter a valid email address.'
+  }),
+  role: z.enum(['user', 'super_admin'], {
+    required_error: 'Please select a role.'
+  }),
+  is_active: z.boolean().default(false)
 });
 
 export default function UsersForm({
   initialData,
   pageTitle
 }: {
-  initialData: Product | null;
+  initialData: User | null;
   pageTitle: string;
 }) {
   const defaultValues = {
     name: initialData?.name || '',
-    category: initialData?.category || '',
-    price: initialData?.price || 0,
-    description: initialData?.description || ''
+    email: initialData?.email || '',
+    role: (initialData?.role || 'user') as 'user' | 'super_admin',
+    is_active: initialData?.is_active || false
   };
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -79,7 +70,7 @@ export default function UsersForm({
   }
 
   return (
-    <Card className='mx-auto w-full'>
+    <Card className='w-full md:w-1/2'>
       <CardHeader>
         <CardTitle className='text-left text-2xl font-bold'>
           {pageTitle}
@@ -88,41 +79,15 @@ export default function UsersForm({
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-8'>
-            <FormField
-              control={form.control}
-              name='image'
-              render={({ field }) => (
-                <div className='space-y-6'>
-                  <FormItem className='w-full'>
-                    <FormLabel>Images</FormLabel>
-                    <FormControl>
-                      <FileUploader
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        maxFiles={4}
-                        maxSize={4 * 1024 * 1024}
-                        // disabled={loading}
-                        // progresses={progresses}
-                        // pass the onUpload function here for direct upload
-                        // onUpload={uploadFiles}
-                        // disabled={isUploading}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                </div>
-              )}
-            />
-
-            <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
+            <div className='grid grid-cols-1 gap-6 md:grid-cols-1'>
               <FormField
                 control={form.control}
                 name='name'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Product Name</FormLabel>
+                    <FormLabel>User Name</FormLabel>
                     <FormControl>
-                      <Input placeholder='Enter product name' {...field} />
+                      <Input placeholder='Enter user name' {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -130,27 +95,39 @@ export default function UsersForm({
               />
               <FormField
                 control={form.control}
-                name='category'
+                name='email'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Category</FormLabel>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type='email'
+                        placeholder='Enter email address' 
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='role'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Role</FormLabel>
                     <Select
-                      onValueChange={(value) => field.onChange(value)}
-                      value={field.value[field.value.length - 1]}
+                      onValueChange={field.onChange}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder='Select categories' />
+                          <SelectValue placeholder='Select role' />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value='beauty'>Beauty Products</SelectItem>
-                        <SelectItem value='electronics'>Electronics</SelectItem>
-                        <SelectItem value='clothing'>Clothing</SelectItem>
-                        <SelectItem value='home'>Home & Garden</SelectItem>
-                        <SelectItem value='sports'>
-                          Sports & Outdoors
-                        </SelectItem>
+                        <SelectItem value='user'>User</SelectItem>
+                        <SelectItem value='super_admin'>Super Admin</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -159,41 +136,30 @@ export default function UsersForm({
               />
               <FormField
                 control={form.control}
-                name='price'
+                name='is_active'
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Price</FormLabel>
+                  <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
+                    <div className='space-y-0.5'>
+                      <FormLabel className='text-base'>Active Status</FormLabel>
+                      <div className='text-sm text-muted-foreground'>
+                        Set whether this user account is active
+                      </div>
+                    </div>
                     <FormControl>
-                      <Input
-                        type='number'
-                        step='0.01'
-                        placeholder='Enter price'
-                        {...field}
+                      <input
+                        type='checkbox'
+                        className='h-4 w-4'
+                        checked={field.value}
+                        onChange={field.onChange}
                       />
                     </FormControl>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-            <FormField
-              control={form.control}
-              name='description'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder='Enter product description'
-                      className='resize-none'
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Button type='submit'>Add Product</Button>
+            <Button type='submit'>
+              {initialData ? 'Update User' : 'Create User'}
+            </Button>
           </form>
         </Form>
       </CardContent>

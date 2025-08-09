@@ -1,6 +1,6 @@
-import { fakeProducts, Product } from '@/constants/mock-api';
+import { fakeProducts, fakeUsers, Product, User } from '@/constants/mock-api';
 import { notFound } from 'next/navigation';
-import ProductForm from './users-form';
+import UsersForm from './users-form';
 
 type TUserViewPageProps = {
   userId: string;
@@ -9,17 +9,17 @@ type TUserViewPageProps = {
 export default async function UsersViewPage({
   userId
 }: TUserViewPageProps) {
-  let product = null;
+  let user = null;
   let pageTitle = 'Create New User';
 
   if (userId !== 'new') {
-    const data = await fakeProducts.getProductById(Number(userId));
-    product = data.product as Product;
-    if (!product) {
+    const data = await fakeUsers.getUserById(userId);
+    user = data.user as User;
+    if (!user) {
       notFound();
     }
     pageTitle = `Edit User`;
   }
 
-  return <ProductForm initialData={product} pageTitle={pageTitle} />;
+  return <UsersForm initialData={user} pageTitle={pageTitle} />;
 }
