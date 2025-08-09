@@ -173,8 +173,11 @@ export const fakeUsers = {
     function generateRandomUserData(id: number): User {
       const roles: ('user' | 'super_admin')[] = ['user', 'super_admin'];
       
+      // Use deterministic seed for consistent IDs
+      faker.seed(id * 100);
+      
       return {
-        id: faker.string.uuid(),
+        id: `user-${id.toString().padStart(3, '0')}`, // Consistent ID format
         name: faker.person.fullName(),
         email: faker.internet.email(),
         role: faker.helpers.arrayElement(roles),
@@ -191,6 +194,9 @@ export const fakeUsers = {
     }
 
     this.records = sampleUsers;
+    
+    // Reset faker seed to ensure other parts aren't affected
+    faker.seed();
   },
 
   // Get all users with optional role filtering and search
