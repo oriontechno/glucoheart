@@ -44,7 +44,6 @@ export default async function Page(props: pageProps) {
         </div>
         <Separator />
         <Suspense
-          // key={key}
           fallback={
             <DataTableSkeleton columnCount={5} rowCount={8} filterCount={2} />
           }
