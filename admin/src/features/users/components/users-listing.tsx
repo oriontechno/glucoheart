@@ -1,8 +1,7 @@
-import { Product } from '@/constants/data';
-import { fakeProducts, fakeUsers, User } from '@/constants/mock-api';
+import { fakeUsers, User } from '@/constants/mock-api';
 import { searchParamsCache } from '@/lib/searchparams';
-import { ProductTable } from './users-tables';
 import { columns } from './users-tables/columns';
+import { UsersTable } from './users-tables';
 
 type UsersListingPage = {};
 
@@ -27,7 +26,7 @@ export default async function UsersListingPage({}: UsersListingPage) {
   const users: User[] = data.users;
 
   return (
-    <ProductTable
+    <UsersTable
       data={users}
       totalItems={totalUsers}
       columns={columns}
