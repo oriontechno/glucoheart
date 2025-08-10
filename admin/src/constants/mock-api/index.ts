@@ -3,9 +3,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 // Export all types and mock APIs
-export * from './product';
-export * from './user';
-export * from './article';
+export * from './products';
+export * from './users';
+export * from './articles';
 
 // Re-export common utilities
-export { delay } from './product';
+export { delay } from './products';

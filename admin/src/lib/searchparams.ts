@@ -8,8 +8,12 @@ import {
 export const searchParams = {
   page: parseAsInteger.withDefault(1),
   perPage: parseAsInteger.withDefault(10),
+  // User search fields
   name: parseAsString,
+  email: parseAsString,
+  // Article search fields  
   title: parseAsString,
+  // Common fields
   gender: parseAsString,
   category: parseAsString,
   sort: parseAsString
