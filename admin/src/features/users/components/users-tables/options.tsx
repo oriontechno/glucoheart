@@ -5,6 +5,6 @@ export const ROLE_OPTIONS = [
 ];
 
 export const ACTIVE_OPTIONS = [
-  { value: 'true', label: 'Active' },
-  { value: 'false', label: 'Inactive' }
+  { value: true, label: 'Active' },
+  { value: false, label: 'Inactive' }
 ];

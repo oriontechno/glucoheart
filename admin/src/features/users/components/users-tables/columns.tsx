@@ -60,6 +60,7 @@ export const columns: ColumnDef<User>[] = [
     }
   },
   {
+    id: 'active',
     accessorKey: 'is_active',
     header: ({ column }: { column: Column<User, unknown> }) => (
       <DataTableColumnHeader column={column} title='Active' />
@@ -69,10 +70,11 @@ export const columns: ColumnDef<User>[] = [
     meta: {
       label: 'Active',
       variant: 'select',
-      options: ACTIVE_OPTIONS
+      options: ACTIVE_OPTIONS.map(option => ({ ...option, value: String(option.value) }))
     },
     cell: ({ row }) => {
-      const isActive = row.getValue('is_active');
+      const isActive = row.getValue('active');
+      console.log('isActive', isActive);
       return <div>{isActive ? <Badge variant='destructive'>Active</Badge> : <Badge>Inactive</Badge>}</div>;
     },
   },
