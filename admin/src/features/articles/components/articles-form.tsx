@@ -23,38 +23,10 @@ import { Article } from '@/constants/mock-api';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { ARTICLE_CATEGORY_OPTIONS } from './articles-tables/options';
 import { FileUploader } from '@/components/file-uploader';
 import { ACCEPTED_IMAGE_TYPES, MAX_FILE_SIZE } from '@/constants/form';
-import { useState } from 'react';
-import Image from 'next/image';
-
-const formSchema = z.object({
-  title: z.string().min(2, {
-    message: 'Article title must be at least 2 characters.'
-  }),
-  content: z.string().min(10, {
-    message: 'Article content must be at least 10 characters.'
-  }),
-  category: z.enum(['hipertensi', 'kardiovaskular'], {
-    required_error: 'Please select a category.'
-  }),
-  image_url: z
-    .any()
-    .refine((files) => {
-      // If editing an existing article, files might be undefined (using existing image)
-      if (!files || files.length === 0) return true;
-      return files?.length == 1;
-    }, 'Image is required.')
-    .refine((files) => {
-      if (!files || files.length === 0) return true;
-      return files?.[0]?.size <= MAX_FILE_SIZE;
-    }, `Max file size is 5MB.`)
-    .refine((files) => {
-      if (!files || files.length === 0) return true;
-      return ACCEPTED_IMAGE_TYPES.includes(files?.[0]?.type);
-    }, '.jpg, .jpeg, .png and .webp files are accepted.')
-});
+import { useState, useEffect } from 'react';
+import { getArticleCategoriesFromMockData } from './articles-tables/columns';
 
 export default function ArticlesForm({
   initialData,
@@ -66,13 +38,78 @@ export default function ArticlesForm({
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(
     initialData?.image_url || null
   );
+  const [categoryOptions, setCategoryOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([]);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true);
+
+  // Load categories on component mount
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        setIsLoadingCategories(true);
+        const options = await getArticleCategoriesFromMockData();
+        setCategoryOptions(options);
+      } catch (error) {
+        console.error('Error loading categories:', error);
+        // Fallback to empty array
+        setCategoryOptions([]);
+      } finally {
+        setIsLoadingCategories(false);
+      }
+    };
+
+    loadCategories();
+  }, []);
+
+  // Get available category values for dynamic validation
+  const availableCategories = categoryOptions.map((option) => option.value);
+
+  // Dynamic schema based on available categories and existing data
+  const formSchema = z.object({
+    title: z.string().min(2, {
+      message: 'Article title must be at least 2 characters.'
+    }),
+    content: z.string().min(10, {
+      message: 'Article content must be at least 10 characters.'
+    }),
+    category: z.string().refine((val) => availableCategories.includes(val), {
+      message: 'Please select a valid category.'
+    }),
+    image_url: z
+      .any()
+      .refine(
+        (files) => {
+          // For new articles, require at least one file if no existing image
+          if (
+            !initialData &&
+            (!files || files.length === 0) &&
+            !existingImageUrl
+          ) {
+            return false;
+          }
+          // For existing articles, files are optional
+          if (files && files.length > 0) {
+            return files.length === 1;
+          }
+          return true;
+        },
+        initialData ? 'Please select only one image.' : 'Image is required.'
+      )
+      .refine((files) => {
+        if (!files || files.length === 0) return true;
+        return files[0]?.size <= MAX_FILE_SIZE;
+      }, `Max file size is 5MB.`)
+      .refine((files) => {
+        if (!files || files.length === 0) return true;
+        return ACCEPTED_IMAGE_TYPES.includes(files[0]?.type);
+      }, '.jpg, .jpeg, .png and .webp files are accepted.')
+  });
 
   const defaultValues = {
     title: initialData?.title || '',
     content: initialData?.content || '',
-    category: (initialData?.category || 'hipertensi') as
-      | 'hipertensi'
-      | 'kardiovaskular',
+    category: initialData?.category || availableCategories[0] || '',
     image_url: [] as File[] // FileUploader expects File[] type
   };
 
@@ -85,6 +122,11 @@ export default function ArticlesForm({
     // Add timestamps for new articles
     const articleData = {
       ...values,
+      // Handle image - use existing image URL if no new files uploaded
+      image_url:
+        values.image_url && values.image_url.length > 0
+          ? values.image_url[0] // New file uploaded
+          : existingImageUrl, // Use existing image URL
       // These would typically be handled by the backend
       created_at: initialData
         ? initialData.created_at
@@ -169,12 +211,18 @@ export default function ArticlesForm({
                   <FormLabel>Category</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder='Select category' />
+                      <SelectTrigger disabled={isLoadingCategories}>
+                        <SelectValue
+                          placeholder={
+                            isLoadingCategories
+                              ? 'Loading categories...'
+                              : 'Select category'
+                          }
+                        />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {ARTICLE_CATEGORY_OPTIONS.map((option) => (
+                      {categoryOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           {option.label}
                         </SelectItem>

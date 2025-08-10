@@ -1,5 +1,6 @@
 import { faker } from '@faker-js/faker';
 import { matchSorter } from 'match-sorter';
+import { ArticleCategory, fakeArticleCategories } from './article-categories';
 
 export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -9,7 +10,7 @@ export type Article = {
   id: number; // UUID (PK)
   title: string;
   content: string;
-  category: 'kardiovaskular' | 'hipertensi';
+  category: string;
   image_url: string;
   created_at: string;
   updated_at: string;
@@ -23,19 +24,19 @@ export const fakeArticles = {
   initialize() {
     const sampleArticles: Article[] = [];
     function generateRandomArticleData(id: number): Article {
-      const categories: ('kardiovaskular' | 'hipertensi')[] = [
-        'kardiovaskular',
-        'hipertensi'
-      ];
-
       // Use deterministic seed for consistent data
       faker.seed(id * 100);
+
+      // Get a random category from the existing mock data
+      const randomCategory = faker.helpers.arrayElement(
+        fakeArticleCategories.records
+      ).name;
 
       return {
         id: id, // Use number type for id
         title: faker.lorem.sentence({ min: 4, max: 8 }),
         content: faker.lorem.paragraphs(3, '\n\n'),
-        category: faker.helpers.arrayElement(categories),
+        category: randomCategory,
         image_url: `https://api.slingacademy.com/public/sample-products/${id}.png`,
         created_at: faker.date
           .between({ from: '2022-01-01', to: '2023-12-31' })

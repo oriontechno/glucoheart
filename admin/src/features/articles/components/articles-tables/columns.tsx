@@ -3,9 +3,43 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { Text } from 'lucide-react';
 import { CellAction } from './cell-action';
-import { Article } from '@/constants/mock-api';
+import { Article, fakeArticleCategories } from '@/constants/mock-api';
 import Image from 'next/image';
-import { ARTICLE_CATEGORY_OPTIONS } from './options';
+
+// Helper function to ensure categories are available and convert to options format
+const formatCategoriesAsOptions = (categories: any[]) => {
+  return categories.map((category) => ({
+    value: category.name,
+    label: category.name.charAt(0).toUpperCase() + category.name.slice(1)
+  }));
+};
+
+// Function for async operations (recommended approach)
+export const getArticleCategoriesFromMockData = async () => {
+  try {
+    // Use the proper getAll method from mock API
+    const categories = await fakeArticleCategories.getAll({});
+    return formatCategoriesAsOptions(categories);
+  } catch (error) {
+    // Fallback: ensure initialization and try again
+    fakeArticleCategories.initialize();
+    const categories = await fakeArticleCategories.getAll({});
+    return formatCategoriesAsOptions(categories);
+  }
+};
+
+// Legacy function for synchronous access (only for table columns)
+const getCategoriesSync = () => {
+  // Ensure categories are initialized
+  if (fakeArticleCategories.records.length === 0) {
+    fakeArticleCategories.initialize();
+  }
+
+  return formatCategoriesAsOptions(fakeArticleCategories.records);
+};
+
+// Get article category options for table columns (synchronous)
+const ARTICLE_CATEGORY_OPTIONS = getCategoriesSync();
 
 export const columns: ColumnDef<Article>[] = [
   {
