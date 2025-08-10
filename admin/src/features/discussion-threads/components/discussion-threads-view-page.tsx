@@ -1,8 +1,4 @@
-import {
-  ArticleCategory,
-  DiscussionThread,
-  fakeDiscussionThreads
-} from '@/constants/mock-api';
+import { DiscussionThread, fakeDiscussionThreads } from '@/constants/mock-api';
 import { notFound } from 'next/navigation';
 import DiscussionThreadsForm from './discussion-threads-form';
 
@@ -15,6 +11,8 @@ export default async function DiscussionThreadsViewPage({
 }: TDiscussionThreadsViewPageProps) {
   let discussionThread = null;
   let pageTitle = 'Create New Discussion Thread';
+
+  console.log({ discussionThreadId });
 
   if (discussionThreadId !== 'new') {
     try {

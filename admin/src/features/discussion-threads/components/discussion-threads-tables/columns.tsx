@@ -23,6 +23,18 @@ export const columns: ColumnDef<DiscussionThread>[] = [
     enableSorting: true
   },
   {
+    id: 'user_id',
+    accessorKey: 'user_id',
+    header: ({ column }: { column: Column<DiscussionThread, unknown> }) => (
+      <DataTableColumnHeader column={column} title='User ID' />
+    ),
+    cell: ({ cell }) => (
+      <div>{cell.getValue<DiscussionThread['user_id']>()}</div>
+    ),
+    enableColumnFilter: true,
+    enableSorting: true
+  },
+  {
     accessorKey: 'created_at',
     header: ({ column }: { column: Column<DiscussionThread, unknown> }) => (
       <DataTableColumnHeader column={column} title='Created At' />

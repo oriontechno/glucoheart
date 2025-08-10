@@ -15,6 +15,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { DiscussionThread } from '@/constants/mock-api';
+import { Textarea } from '@/components/ui/textarea';
 
 const formSchema = z.object({
   title: z.string().min(2, {
@@ -76,6 +77,23 @@ export default function DiscussionThreadsForm({
                   <FormControl>
                     <Input
                       placeholder='Enter discussion thread title'
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name='content'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Content</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder='Enter discussion thread content'
+                      className='min-h-[120px] resize-none'
                       {...field}
                     />
                   </FormControl>

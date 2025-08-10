@@ -57,7 +57,7 @@ export const fakeDiscussionThreads = {
 
       return {
         id: `thread-${id.toString().padStart(3, '0')}`, // Consistent ID format
-        user_id: randomUser.id, // Take from existing users
+        user_id: randomUser.name, // Take from existing users
         title: randomTitle,
         content: faker.lorem.paragraphs(
           faker.number.int({ min: 2, max: 4 }),
@@ -100,7 +100,7 @@ export const fakeDiscussionThreads = {
     // Search functionality across multiple fields
     if (search) {
       discussionThreads = matchSorter(discussionThreads, search, {
-        keys: ['title', 'content']
+        keys: ['title', 'content', 'user_id']
       });
     }
 
