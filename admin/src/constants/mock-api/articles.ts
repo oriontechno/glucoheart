@@ -9,7 +9,7 @@ export type Article = {
   id: number; // UUID (PK)
   title: string;
   content: string;
-  category: 'Kardiovaskular' | 'Hipertensi';
+  category: 'kardiovaskular' | 'hipertensi';
   image_url: string;
   created_at: string;
   updated_at: string;
@@ -23,11 +23,14 @@ export const fakeArticles = {
   initialize() {
     const sampleArticles: Article[] = [];
     function generateRandomArticleData(id: number): Article {
-      const categories: ('Kardiovaskular' | 'Hipertensi')[] = ['Kardiovaskular', 'Hipertensi'];
+      const categories: ('kardiovaskular' | 'hipertensi')[] = [
+        'kardiovaskular',
+        'hipertensi'
+      ];
 
       // Use deterministic seed for consistent data
       faker.seed(id * 100);
-      
+
       return {
         id: id, // Use number type for id
         title: faker.lorem.sentence({ min: 4, max: 8 }),
@@ -96,6 +99,7 @@ export const fakeArticles = {
     sort?: string;
   }) {
     await delay(1000);
+
     const categoryArray = category ? category.split('.') : [];
     let allArticles = await this.getAll({
       category: categoryArray,
@@ -126,9 +130,15 @@ export const fakeArticles = {
                 } else {
                   comparison = aValue.localeCompare(bValue);
                 }
-              } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+              } else if (
+                typeof aValue === 'number' &&
+                typeof bValue === 'number'
+              ) {
                 comparison = aValue - bValue;
-              } else if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+              } else if (
+                typeof aValue === 'boolean' &&
+                typeof bValue === 'boolean'
+              ) {
                 comparison = Number(aValue) - Number(bValue);
               } else {
                 comparison = String(aValue).localeCompare(String(bValue));

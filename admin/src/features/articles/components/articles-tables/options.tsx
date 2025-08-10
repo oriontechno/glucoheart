@@ -1,5 +1,4 @@
-export const ROLE_OPTIONS = [
-  { value: 'user', label: 'Article' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'super_admin', label: 'Super Admin' }
+export const ARTICLE_CATEGORY_OPTIONS = [
+  { value: 'hipertensi', label: 'Hipertensi' },
+  { value: 'kardiovaskular', label: 'Kardiovaskular' },
 ];

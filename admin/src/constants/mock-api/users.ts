@@ -27,10 +27,10 @@ export const fakeUsers = {
     const sampleUsers: User[] = [];
     function generateRandomUserData(id: number): User {
       const roles: ('user' | 'super_admin')[] = ['user', 'super_admin'];
-      
+
       // Use deterministic seed for consistent IDs
       faker.seed(id * 100);
-      
+
       return {
         id: `user-${id.toString().padStart(3, '0')}`, // Consistent ID format
         name: faker.person.fullName(),
@@ -49,7 +49,7 @@ export const fakeUsers = {
     }
 
     this.records = sampleUsers;
-    
+
     // Reset faker seed to ensure other parts aren't affected
     faker.seed();
   },
@@ -68,15 +68,11 @@ export const fakeUsers = {
 
     // Filter users based on selected roles
     if (roles.length > 0) {
-      users = users.filter((user) =>
-        roles.includes(user.role)
-      );
+      users = users.filter((user) => roles.includes(user.role));
     }
 
     if (actives && actives.length > 0) {
-      users = users.filter((user) =>
-        actives.includes(String(user.is_active))
-      );
+      users = users.filter((user) => actives.includes(String(user.is_active)));
     }
 
     // Search functionality across multiple fields
@@ -100,7 +96,7 @@ export const fakeUsers = {
   }: {
     page?: number;
     limit?: number;
-      roles?: string;
+    roles?: string;
     actives?: string;
     search?: string;
     sort?: string;
@@ -110,11 +106,11 @@ export const fakeUsers = {
     const activesArray = actives ? actives.split('.') : [];
     let allUsers = await this.getAll({
       roles: rolesArray,
-      search,
-      actives: activesArray
+      actives: activesArray,
+      search
     });
 
-    console.log({roles})
+    console.log({ roles });
 
     // Handle sorting
     if (sort) {
@@ -140,9 +136,15 @@ export const fakeUsers = {
                 } else {
                   comparison = aValue.localeCompare(bValue);
                 }
-              } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+              } else if (
+                typeof aValue === 'number' &&
+                typeof bValue === 'number'
+              ) {
                 comparison = aValue - bValue;
-              } else if (typeof aValue === 'boolean' && typeof bValue === 'boolean') {
+              } else if (
+                typeof aValue === 'boolean' &&
+                typeof bValue === 'boolean'
+              ) {
                 comparison = Number(aValue) - Number(bValue);
               } else {
                 comparison = String(aValue).localeCompare(String(bValue));

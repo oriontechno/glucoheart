@@ -19,7 +19,7 @@ export default async function ArticlesListingPage({}: ArticlesListingPageProps) 
     page,
     limit: pageLimit,
     ...(search && { search }),
-    ...(categories && { categories: categories }),
+    ...(categories && { category: categories }),
     ...(sort && { sort })
   };
 
