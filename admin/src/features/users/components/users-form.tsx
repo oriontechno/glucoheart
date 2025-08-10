@@ -24,14 +24,6 @@ import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { ROLE_OPTIONS } from './users-tables/options';
 
-const MAX_FILE_SIZE = 5000000;
-const ACCEPTED_IMAGE_TYPES = [
-  'image/jpeg',
-  'image/jpg',
-  'image/png',
-  'image/webp'
-];
-
 const formSchema = z.object({
   name: z.string().min(2, {
     message: 'User name must be at least 2 characters.'
@@ -99,10 +91,10 @@ export default function UsersForm({
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input 
+                      <Input
                         type='email'
-                        placeholder='Enter email address' 
-                        {...field} 
+                        placeholder='Enter email address'
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -115,10 +107,7 @@ export default function UsersForm({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Role</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder='Select role' />
@@ -143,7 +132,7 @@ export default function UsersForm({
                   <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
                     <div className='space-y-0.5'>
                       <FormLabel className='text-base'>Active Status</FormLabel>
-                      <div className='text-sm text-muted-foreground'>
+                      <div className='text-muted-foreground text-sm'>
                         Set whether this user account is active
                       </div>
                     </div>

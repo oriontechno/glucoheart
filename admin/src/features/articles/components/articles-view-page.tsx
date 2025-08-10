@@ -3,7 +3,7 @@ import { Article, fakeArticles } from '@/constants/mock-api';
 import ArticlesForm from './articles-form';
 
 type TArticleViewPageProps = {
-  articleId: number;
+  articleId: number | string;
 };
 
 export default async function ArticlesViewPage({
@@ -12,9 +12,9 @@ export default async function ArticlesViewPage({
   let article = null;
   let pageTitle = 'Create New Article';
 
-  if (articleId) {
+  if (articleId !== 'new') {
     try {
-      const data = await fakeArticles.getArticleById(articleId);
+      const data = await fakeArticles.getArticleById(Number(articleId));
 
       if (data.success && data.article) {
         article = data.article as Article;
