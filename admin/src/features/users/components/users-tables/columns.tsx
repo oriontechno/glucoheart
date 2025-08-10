@@ -3,7 +3,6 @@ import { Badge } from '@/components/ui/badge';
 import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-header';
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { CheckCircle2, Text, XCircle } from 'lucide-react';
-import Image from 'next/image';
 import { CellAction } from './cell-action';
 import { ROLE_OPTIONS } from './options';
 import { User } from '@/constants/mock-api';
@@ -18,7 +17,7 @@ export const columns: ColumnDef<User>[] = [
     cell: ({ cell }) => <div>{cell.getValue<User['name']>()}</div>,
     meta: {
       label: 'Name',
-      placeholder: 'Search name...',
+      placeholder: 'Search ...',
       variant: 'text',
       icon: Text
     },
@@ -32,12 +31,6 @@ export const columns: ColumnDef<User>[] = [
       <DataTableColumnHeader column={column} title='Email' />
     ),
     cell: ({ cell }) => <div>{cell.getValue<User['email']>()}</div>,
-    meta: {
-      label: 'Email',
-      placeholder: 'Search email...',
-      variant: 'text',
-      icon: Text
-    },
     enableColumnFilter: true,
     enableSorting: true
   },
