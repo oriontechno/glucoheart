@@ -38,7 +38,7 @@ export const navItems: NavItem[] = [
     items: [
       {
         title: 'Education Article',
-        url: '/dashboard/article',
+        url: '/dashboard/articles',
         icon: 'post',
         shortcut: ['n', 'a']
       },

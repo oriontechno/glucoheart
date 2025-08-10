@@ -1,7 +1,7 @@
-import { fakeUsers, User } from '@/constants/mock-api';
 import { searchParamsCache } from '@/lib/searchparams';
 import { columns } from './users-tables/columns';
 import { UsersTable } from './users-tables';
+import { fakeUsers, User } from '@/constants/mock-api';
 
 type UsersListingPage = {};
 

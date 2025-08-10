@@ -5,6 +5,7 @@
 // Export all types and mock APIs
 export * from './product';
 export * from './user';
+export * from './article';
 
 // Re-export common utilities
 export { delay } from './product';
