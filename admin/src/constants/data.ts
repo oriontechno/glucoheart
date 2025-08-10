@@ -30,6 +30,14 @@ export const navItems: NavItem[] = [
     items: [] // No child items
   },
   {
+    title: 'Discussion Threads',
+    url: '/dashboard/discussion-threads',
+    icon: 'discussion',
+    shortcut: ['d', 't'],
+    isActive: false,
+    items: []
+  },
+  {
     title: 'Articles',
     url: '#',
     icon: 'post',

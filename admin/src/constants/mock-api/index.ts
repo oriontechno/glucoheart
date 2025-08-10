@@ -7,6 +7,7 @@ export * from './products';
 export * from './users';
 export * from './articles';
 export * from './article-categories';
+export * from './discussion-threads';
 
 // Re-export common utilities
 export { delay } from './products';

@@ -10,7 +10,7 @@ type ArticleCategoriesListingPageProps = {};
 export default async function ArticleCategoriesListingPage({}: ArticleCategoriesListingPageProps) {
   // Showcasing the use of search params cache in nested RSCs
   const page = searchParamsCache.get('page');
-  const search = searchParamsCache.get('name');
+  const search = searchParamsCache.get('title');
   const pageLimit = searchParamsCache.get('perPage');
   const sort = searchParamsCache.get('sort');
 
