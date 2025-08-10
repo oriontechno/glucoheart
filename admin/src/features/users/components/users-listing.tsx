@@ -10,14 +10,16 @@ export default async function UsersListingPage({}: UsersListingPage) {
   const page = searchParamsCache.get('page');
   const search = searchParamsCache.get('name');
   const pageLimit = searchParamsCache.get('perPage');
-  const categories = searchParamsCache.get('category');
+  const roles = searchParamsCache.get('role');
+  const actives = searchParamsCache.get('active');
   const sort = searchParamsCache.get('sort');
 
   const filters = {
     page,
     limit: pageLimit,
     ...(search && { search }),
-    ...(categories && { categories: categories }),
+    ...(roles && { roles: roles }),
+    ...(actives && { actives: actives }),
     ...(sort && { sort })
   };
 

@@ -4,7 +4,7 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { CheckCircle2, Text, XCircle } from 'lucide-react';
 import { CellAction } from './cell-action';
-import { ROLE_OPTIONS } from './options';
+import { ACTIVE_OPTIONS, ROLE_OPTIONS } from './options';
 import { User } from '@/constants/mock-api';
 
 export const columns: ColumnDef<User>[] = [
@@ -54,8 +54,8 @@ export const columns: ColumnDef<User>[] = [
     enableColumnFilter: true,
     enableSorting: true,
     meta: {
-      label: 'roles',
-      variant: 'multiSelect',
+      label: 'Roles',
+      variant: 'select',
       options: ROLE_OPTIONS
     }
   },
@@ -64,7 +64,13 @@ export const columns: ColumnDef<User>[] = [
     header: ({ column }: { column: Column<User, unknown> }) => (
       <DataTableColumnHeader column={column} title='Active' />
     ),
+    enableColumnFilter: true,
     enableSorting: true,
+    meta: {
+      label: 'Active',
+      variant: 'select',
+      options: ACTIVE_OPTIONS
+    },
     cell: ({ row }) => {
       const isActive = row.getValue('is_active');
       return <div>{isActive ? <Badge variant='destructive'>Active</Badge> : <Badge>Inactive</Badge>}</div>;

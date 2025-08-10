@@ -57,10 +57,12 @@ export const fakeUsers = {
   // Get all users with optional role filtering and search
   async getAll({
     roles = [],
-    search
+    search,
+    actives
   }: {
     roles?: string[];
     search?: string;
+    actives?: string[];
   }) {
     let users = [...this.records];
 
@@ -71,10 +73,16 @@ export const fakeUsers = {
       );
     }
 
+    if (actives && actives.length > 0) {
+      users = users.filter((user) =>
+        actives.includes(String(user.is_active))
+      );
+    }
+
     // Search functionality across multiple fields
     if (search) {
       users = matchSorter(users, search, {
-        keys: ['name', 'email', 'role']
+        keys: ['name', 'email', 'roles']
       });
     }
 
@@ -86,21 +94,27 @@ export const fakeUsers = {
     page = 1,
     limit = 10,
     roles,
+    actives,
     search,
     sort
   }: {
     page?: number;
     limit?: number;
-    roles?: string;
+      roles?: string;
+    actives?: string;
     search?: string;
     sort?: string;
   }) {
     await delay(1000);
     const rolesArray = roles ? roles.split('.') : [];
+    const activesArray = actives ? actives.split('.') : [];
     let allUsers = await this.getAll({
       roles: rolesArray,
-      search
+      search,
+      actives: activesArray
     });
+
+    console.log({roles})
 
     // Handle sorting
     if (sort) {

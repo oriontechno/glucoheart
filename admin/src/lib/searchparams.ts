@@ -11,6 +11,8 @@ export const searchParams = {
   // User search fields
   name: parseAsString,
   email: parseAsString,
+  role: parseAsString,
+  active: parseAsString,
   // Article search fields  
   title: parseAsString,
   // Common fields
