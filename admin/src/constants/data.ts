@@ -30,7 +30,7 @@ export const navItems: NavItem[] = [
     items: [] // No child items
   },
   {
-    title: 'Article',
+    title: 'Articles',
     url: '#',
     icon: 'post',
     shortcut: ['a', 'a'],
@@ -40,13 +40,13 @@ export const navItems: NavItem[] = [
         title: 'Education Article',
         url: '/dashboard/articles',
         icon: 'post',
-        shortcut: ['n', 'a']
+        shortcut: ['e', 'a']
       },
       {
         title: 'Article Category',
-        url: '/dashboard/article-category',
+        url: '/dashboard/article-categories',
         icon: 'post',
-        shortcut: ['n', 'a']
+        shortcut: ['a', 'c']
       }
     ]
   },
@@ -70,9 +70,9 @@ export const navItems: NavItem[] = [
         url: '/dashboard/profile',
         icon: 'userPen',
         shortcut: ['m', 'm']
-      },
+      }
     ]
-  },
+  }
 ];
 
 export interface SaleUser {

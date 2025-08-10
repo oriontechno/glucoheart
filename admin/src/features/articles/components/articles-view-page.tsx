@@ -3,7 +3,7 @@ import { Article, fakeArticles } from '@/constants/mock-api';
 import ArticlesForm from './articles-form';
 
 type TArticleViewPageProps = {
-  articleId: number | string;
+  articleId: string;
 };
 
 export default async function ArticlesViewPage({
@@ -11,6 +11,8 @@ export default async function ArticlesViewPage({
 }: TArticleViewPageProps) {
   let article = null;
   let pageTitle = 'Create New Article';
+
+  console.log({ articleId });
 
   if (articleId !== 'new') {
     try {
