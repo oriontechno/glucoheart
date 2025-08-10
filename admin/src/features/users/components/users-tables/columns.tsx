@@ -70,13 +70,24 @@ export const columns: ColumnDef<User>[] = [
     meta: {
       label: 'Active',
       variant: 'select',
-      options: ACTIVE_OPTIONS.map(option => ({ ...option, value: String(option.value) }))
+      options: ACTIVE_OPTIONS.map((option) => ({
+        ...option,
+        value: String(option.value)
+      }))
     },
     cell: ({ row }) => {
       const isActive = row.getValue('active');
       console.log('isActive', isActive);
-      return <div>{isActive ? <Badge variant='destructive'>Active</Badge> : <Badge>Inactive</Badge>}</div>;
-    },
+      return (
+        <div>
+          {isActive ? (
+            <Badge variant='destructive'>Active</Badge>
+          ) : (
+            <Badge>Inactive</Badge>
+          )}
+        </div>
+      );
+    }
   },
   {
     accessorKey: 'created_at',
@@ -89,7 +100,16 @@ export const columns: ColumnDef<User>[] = [
       return (
         <div>
           {createdAt
-            ? new Date(createdAt as string | number | Date).toISOString().slice(0, 10)
+            ? new Date(createdAt as string | number | Date).toLocaleDateString(
+                'en-US',
+                {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }
+              )
             : ''}
         </div>
       );

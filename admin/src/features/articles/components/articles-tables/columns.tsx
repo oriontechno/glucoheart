@@ -75,9 +75,16 @@ export const columns: ColumnDef<Article>[] = [
       return (
         <div>
           {createdAt
-            ? new Date(createdAt as string | number | Date)
-                .toISOString()
-                .slice(0, 10)
+            ? new Date(createdAt as string | number | Date).toLocaleDateString(
+                'en-US',
+                {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }
+              )
             : ''}
         </div>
       );
