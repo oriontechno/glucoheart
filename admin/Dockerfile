@@ -1,7 +1,7 @@
 FROM node:22
 
 RUN npm config set registry https://registry.npmmirror.com \
-  && npm install -g pnpm@8.15.6
+  && npm install -g pnpm@10.12.4
 
 
 WORKDIR /app
