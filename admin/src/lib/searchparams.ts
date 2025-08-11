@@ -8,9 +8,17 @@ import {
 export const searchParams = {
   page: parseAsInteger.withDefault(1),
   perPage: parseAsInteger.withDefault(10),
+  // User search fields
   name: parseAsString,
+  email: parseAsString,
+  role: parseAsString,
+  active: parseAsString,
+  // Article search fields  
+  title: parseAsString,
+  // Common fields
   gender: parseAsString,
-  category: parseAsString
+  category: parseAsString,
+  sort: parseAsString
   // advanced filter
   // filters: getFiltersStateParser().withDefault([]),
   // joinOperator: parseAsStringEnum(['and', 'or']).withDefault('and')

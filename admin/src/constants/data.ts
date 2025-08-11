@@ -30,6 +30,43 @@ export const navItems: NavItem[] = [
     items: [] // No child items
   },
   {
+    title: 'Discussion Threads',
+    url: '/dashboard/discussion-threads',
+    icon: 'discussion',
+    shortcut: ['d', 't'],
+    isActive: false,
+    items: []
+  },
+  {
+    title: 'Articles',
+    url: '#',
+    icon: 'post',
+    shortcut: ['a', 'a'],
+    isActive: true,
+    items: [
+      {
+        title: 'Education Article',
+        url: '/dashboard/articles',
+        icon: 'post',
+        shortcut: ['e', 'a']
+      },
+      {
+        title: 'Article Category',
+        url: '/dashboard/article-categories',
+        icon: 'post',
+        shortcut: ['a', 'c']
+      }
+    ]
+  },
+  {
+    title: 'Users',
+    url: '/dashboard/users',
+    icon: 'user',
+    shortcut: ['u', 'u'],
+    isActive: false,
+    items: [] // No child items
+  },
+  {
     title: 'Account',
     url: '#', // Placeholder as there is no direct link for the parent
     icon: 'billing',
@@ -41,9 +78,9 @@ export const navItems: NavItem[] = [
         url: '/dashboard/profile',
         icon: 'userPen',
         shortcut: ['m', 'm']
-      },
+      }
     ]
-  },
+  }
 ];
 
 export interface SaleUser {

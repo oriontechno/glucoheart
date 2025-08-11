@@ -1,9 +1,9 @@
 ////////////////////////////////////////////////////////////////////////////////
-// 🛑 Nothing in here has anything to do with Nextjs, it's just a fake database
+// 🛑 Product Mock API - Fake database for products
 ////////////////////////////////////////////////////////////////////////////////
 
 import { faker } from '@faker-js/faker';
-import { matchSorter } from 'match-sorter'; // For filtering
+import { matchSorter } from 'match-sorter';
 
 export const delay = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -119,7 +119,7 @@ export const fakeProducts = {
     return {
       success: true,
       time: currentTime,
-      message: 'Sample data for testing and learning purposes',
+      message: 'Sample product data for testing and learning purposes',
       total_products: totalProducts,
       offset,
       limit,
@@ -131,7 +131,7 @@ export const fakeProducts = {
   async getProductById(id: number) {
     await delay(1000); // Simulate a delay
 
-    // Find the product by its ID
+    // Find the product by ID
     const product = this.records.find((product) => product.id === id);
 
     if (!product) {

@@ -1,8 +1,18 @@
+'use client';
+
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export default function Page() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.push('/dashboard/overview');
+  }, [router]);
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      {/* ...existing code... */}
+      <div>Redirecting...</div>
     </main>
   );
 }

@@ -32,6 +32,7 @@ import {
   IconLayoutKanban,
   IconBrandGithub
 } from '@tabler/icons-react';
+import { MessagesSquareIcon } from 'lucide-react';
 
 export type Icon = React.ComponentType<IconProps>;
 
@@ -66,5 +67,6 @@ export const Icons = {
   laptop: IconDeviceLaptop,
   github: IconBrandGithub,
   twitter: IconBrandTwitter,
-  check: IconCheck
+  check: IconCheck,
+  discussion: MessagesSquareIcon
 };
