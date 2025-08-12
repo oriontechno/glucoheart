@@ -9,18 +9,18 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response, Request } from 'express';
-import { LocalAuthGuard } from './guards/local-auth.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ConfigService } from '@nestjs/config';
 import { Public } from '../common/decorators/public.decorator';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { JwtService } from '@nestjs/jwt';
-import { ZodValidation } from 'src/zod/zod-validation.decorator';
+import { ZodValidation } from '../zod/zod-validation.decorator';
 import type {
   CreateRegisterDto,
   CreateLoginDto,
@@ -51,9 +51,18 @@ export class AuthController {
   @Public()
   @ZodValidation(createLoginSchema)
   @Post('login')
-  @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
-  login(@Body() loginDto: CreateLoginDto, @CurrentUser() user: any) {
+  async login(@Body() loginDto: CreateLoginDto) {
+    // Validasi manual di controller menggunakan AuthService
+    const user = await this.authService.validateUser(
+      loginDto.email,
+      loginDto.password,
+    );
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
     this.logger.log(`User logged in: ${user.email}`);
     return this.authService.generateToken(user);
   }
