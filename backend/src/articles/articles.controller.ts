@@ -13,15 +13,21 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { ArticlesService } from './articles.service';
-import { CreateArticleDto } from './dto/create-article.dto';
-import { UpdateArticleDto } from './dto/update-article.dto';
-import { AttachImageDto } from './dto/attach-image.dto';
 import { Request } from 'express';
 import { RequestUser } from './types';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ZodValidation } from '../zod/zod-validation.decorator';
+import {
+  createArticleSchema,
+  updateArticleSchema,
+  attachImageSchema,
+  type CreateArticleDto,
+  type UpdateArticleDto,
+  type AttachImageDto,
+} from './schema/articles.schema';
 
 function ensureUploadDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -60,6 +66,7 @@ export class ArticlesController {
 
   // ===== Admin/Support =====
   @Post()
+  @ZodValidation(createArticleSchema)
   async create(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: CreateArticleDto,
@@ -69,6 +76,7 @@ export class ArticlesController {
   }
 
   @Patch(':id')
+  @ZodValidation(updateArticleSchema)
   async update(
     @Req() req: Request & { user: RequestUser },
     @Param('id', ParseIntPipe) id: number,
@@ -115,6 +123,7 @@ export class ArticlesController {
 
   @Post(':id/images')
   @UseInterceptors(FileInterceptor('file', multerImageOptions))
+  @ZodValidation(attachImageSchema)
   async attachImage(
     @Req() req: Request & { user: RequestUser },
     @Param('id', ParseIntPipe) id: number,

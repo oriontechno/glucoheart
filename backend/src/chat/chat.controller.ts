@@ -8,13 +8,16 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
+import { ZodValidation } from '../zod/zod-validation.decorator';
 import {
-  CreateSessionDto,
-  ChatTargetRole,
-  CreateSessionByRoleDto,
-} from './dto/create-session.dto';
-import { SendMessageDto } from './dto/send-messages.dto';
-import { AssignNurseDto } from './dto/assign-nurse.dto';
+  createSessionByRoleSchema,
+  sendMessageSchema,
+  assignNurseSchema,
+  chatTargetRoles,
+  type CreateSessionByRoleDto,
+  type SendMessageDto,
+  type AssignNurseDto,
+} from './schema/chat.schema';
 import { Request } from 'express';
 import { RequestUser } from './types';
 
@@ -34,18 +37,20 @@ export class ChatController {
 
   // POST /chat/session/by-role : create/get 1:1 session targeting a role (ADMIN/SUPPORT)
   @Post('session')
+  @ZodValidation(createSessionByRoleSchema)
   async createOrGetSessionByRole(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: CreateSessionByRoleDto,
   ) {
     const { user } = req;
-    // Default to SUPPORT if frontend sends nothing (optional)
-    const role = dto.role ?? ChatTargetRole.ADMIN;
+    // Default to ADMIN if frontend sends nothing (optional)
+    const role = dto.role ?? 'ADMIN';
     return this.chat.getOrCreateOneToOneSessionByRole(user.id, role);
   }
 
   // POST /chat/session/:sessionId/message : send message
   @Post('session/:sessionId/message')
+  @ZodValidation(sendMessageSchema)
   async sendMessage(
     @Req() req: Request & { user: RequestUser },
     @Param('sessionId', ParseIntPipe) sessionId: number,
@@ -74,6 +79,7 @@ export class ChatController {
 
   // POST /chat/session/:sessionId/assign-nurse : assign nurse (admin/support only)
   @Post('session/:sessionId/assign-nurse')
+  @ZodValidation(assignNurseSchema)
   async assignNurse(
     @Req() req: Request & { user: RequestUser },
     @Param('sessionId', ParseIntPipe) sessionId: number,

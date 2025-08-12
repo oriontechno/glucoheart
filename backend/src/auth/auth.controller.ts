@@ -9,11 +9,8 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
-  UsePipes,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
-import { LoginDto } from './dto/login.dto';
 import { AuthGuard } from '@nestjs/passport';
 import type { Response, Request } from 'express';
 import { LocalAuthGuard } from './guards/local-auth.guard';
@@ -23,9 +20,15 @@ import { ConfigService } from '@nestjs/config';
 import { Public } from '../common/decorators/public.decorator';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { JwtService } from '@nestjs/jwt';
-import { ZodValidationPipe } from 'src/zod/zod.pipe';
-import type { CreateRegisterDto } from './schema/register.schema';
-import { createRegisterSchema } from './schema/register.schema';
+import { ZodValidation } from 'src/zod/zod-validation.decorator';
+import type {
+  CreateRegisterDto,
+  CreateLoginDto,
+} from './schema/register.schema';
+import {
+  createRegisterSchema,
+  createLoginSchema,
+} from './schema/register.schema';
 
 @Controller('auth')
 export class AuthController {
@@ -39,7 +42,7 @@ export class AuthController {
   ) {}
 
   @Public()
-  @UsePipes(new ZodValidationPipe(createRegisterSchema))
+  @ZodValidation(createRegisterSchema)
   @Post('register')
   register(@Body() createRegisterDto: CreateRegisterDto) {
     console.log({ createRegisterDto });
@@ -47,10 +50,11 @@ export class AuthController {
   }
 
   @Public()
+  @ZodValidation(createLoginSchema)
   @Post('login')
   @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
-  login(@Body() loginDto: LoginDto, @CurrentUser() user: any) {
+  login(@Body() loginDto: CreateLoginDto, @CurrentUser() user: any) {
     this.logger.log(`User logged in: ${user.email}`);
     return this.authService.generateToken(user);
   }

@@ -12,13 +12,20 @@ import {
   Req,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
+import { ZodValidation } from '../zod/zod-validation.decorator';
+import {
+  createUserSchema,
+  updateUserSchema,
+  changePasswordSchema,
+  adminResetPasswordSchema,
+  type CreateUserDto,
+  type UpdateUserDto,
+  type ChangePasswordDto,
+  type AdminResetPasswordDto,
+} from './schema/users.schema';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { ChangePasswordDto } from './dto/change-password.dto';
-import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 type RequestUser = {
   id: number;
   role?: 'ADMIN' | 'SUPPORT' | 'NURSE' | 'USER';
@@ -31,6 +38,7 @@ export class UsersController {
 
   @Post()
   @Roles('admin', 'superadmin')
+  @ZodValidation(createUserSchema)
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
     return this.usersService.create(createUserDto, req.user.role);
   }
@@ -66,6 +74,7 @@ export class UsersController {
   }
 
   @Put(':id')
+  @ZodValidation(updateUserSchema)
   update(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
@@ -86,6 +95,7 @@ export class UsersController {
   }
 
   @Post('change-password')
+  @ZodValidation(changePasswordSchema)
   async changePassword(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: ChangePasswordDto,
@@ -95,6 +105,7 @@ export class UsersController {
   }
 
   @Post('reset-password')
+  @ZodValidation(adminResetPasswordSchema)
   async adminResetPassword(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: AdminResetPasswordDto,

@@ -8,8 +8,13 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { DiscussionService } from './discussion.service';
-import { CreateRoomDto } from './dto/create-room.dto';
-import { DiscussionSendMessageDto } from './dto/send-message.dto';
+import { ZodValidation } from '../zod/zod-validation.decorator';
+import {
+  createRoomSchema,
+  discussionSendMessageSchema,
+  type CreateRoomDto,
+  type DiscussionSendMessageDto,
+} from './schema/discussion.schema';
 import { Request } from 'express';
 import { RequestUser } from './types';
 
@@ -19,6 +24,7 @@ export class DiscussionController {
 
   // Create public room (ADMIN only)
   @Post('rooms')
+  @ZodValidation(createRoomSchema)
   async createRoom(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: CreateRoomDto,
@@ -54,6 +60,7 @@ export class DiscussionController {
 
   // Send / Fetch messages
   @Post('rooms/:roomId/message')
+  @ZodValidation(discussionSendMessageSchema)
   async sendMessage(
     @Req() req: Request & { user: RequestUser },
     @Param('roomId', ParseIntPipe) roomId: number,
