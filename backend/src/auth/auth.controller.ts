@@ -45,7 +45,6 @@ export class AuthController {
   @ZodValidation(createRegisterSchema)
   @Post('register')
   register(@Body() createRegisterDto: CreateRegisterDto) {
-    console.log({ createRegisterDto });
     return this.authService.register(createRegisterDto);
   }
 
