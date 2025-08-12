@@ -22,6 +22,7 @@ const articles_module_1 = require("./articles/articles.module");
 const common_module_1 = require("./common/common.module");
 const chat_module_1 = require("./chat/chat.module");
 const discussion_module_1 = require("./discussion/discussion.module");
+const zod_module_1 = require("./zod/zod.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -42,6 +43,7 @@ exports.AppModule = AppModule = __decorate([
             articles_module_1.ArticlesModule,
             chat_module_1.ChatModule,
             discussion_module_1.DiscussionModule,
+            zod_module_1.ZodModule,
         ],
         controllers: [app_controller_1.AppController],
         providers: [

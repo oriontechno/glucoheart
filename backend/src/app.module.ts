@@ -13,6 +13,7 @@ import { ArticlesModule } from './articles/articles.module';
 import { CommonModule } from './common/common.module';
 import { ChatModule } from './chat/chat.module';
 import { DiscussionModule } from './discussion/discussion.module';
+import { ZodModule } from './zod/zod.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { DiscussionModule } from './discussion/discussion.module';
     ArticlesModule,
     ChatModule,
     DiscussionModule,
+    ZodModule,
   ],
   controllers: [AppController],
   providers: [

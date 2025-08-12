@@ -16,7 +16,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
-const register_dto_1 = require("./dto/register.dto");
 const login_dto_1 = require("./dto/login.dto");
 const passport_1 = require("@nestjs/passport");
 const local_auth_guard_1 = require("./guards/local-auth.guard");
@@ -26,6 +25,8 @@ const config_1 = require("@nestjs/config");
 const public_decorator_1 = require("../common/decorators/public.decorator");
 const token_blacklist_service_1 = require("./token-blacklist.service");
 const jwt_1 = require("@nestjs/jwt");
+const zod_pipe_1 = require("../zod/zod.pipe");
+const register_schema_1 = require("./schema/register.schema");
 let AuthController = AuthController_1 = class AuthController {
     authService;
     configService;
@@ -38,8 +39,9 @@ let AuthController = AuthController_1 = class AuthController {
         this.tokenBlacklistService = tokenBlacklistService;
         this.jwtService = jwtService;
     }
-    register(registerDto) {
-        return this.authService.register(registerDto);
+    register(createRegisterDto) {
+        console.log({ createRegisterDto });
+        return this.authService.register(createRegisterDto);
     }
     login(loginDto, user) {
         this.logger.log(`User logged in: ${user.email}`);
@@ -91,10 +93,11 @@ let AuthController = AuthController_1 = class AuthController {
 exports.AuthController = AuthController;
 __decorate([
     (0, public_decorator_1.Public)(),
+    (0, common_1.UsePipes)(new zod_pipe_1.ZodValidationPipe(register_schema_1.createRegisterSchema)),
     (0, common_1.Post)('register'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [register_dto_1.RegisterDto]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "register", null);
 __decorate([

@@ -23,7 +23,6 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
             secretOrKey: configService.get('JWT_SECRET'),
         });
         this.configService = configService;
-        console.log('JWT_SECRET:', configService.get('JWT_SECRET').substring(0, 3) + '...');
     }
     async validate(payload) {
         console.log('JWT payload validated:', payload);

@@ -9,6 +9,7 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  UsePipes,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -22,6 +23,9 @@ import { ConfigService } from '@nestjs/config';
 import { Public } from '../common/decorators/public.decorator';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { JwtService } from '@nestjs/jwt';
+import { ZodValidationPipe } from 'src/zod/zod.pipe';
+import type { CreateRegisterDto } from './schema/register.schema';
+import { createRegisterSchema } from './schema/register.schema';
 
 @Controller('auth')
 export class AuthController {
@@ -35,9 +39,11 @@ export class AuthController {
   ) {}
 
   @Public()
+  @UsePipes(new ZodValidationPipe(createRegisterSchema))
   @Post('register')
-  register(@Body() registerDto: RegisterDto) {
-    return this.authService.register(registerDto);
+  register(@Body() createRegisterDto: CreateRegisterDto) {
+    console.log({ createRegisterDto });
+    return this.authService.register(createRegisterDto);
   }
 
   @Public()

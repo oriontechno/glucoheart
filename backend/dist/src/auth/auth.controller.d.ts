@@ -1,10 +1,10 @@
 import { AuthService } from './auth.service';
-import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import type { Response, Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { JwtService } from '@nestjs/jwt';
+import type { CreateRegisterDto } from './schema/register.schema';
 export declare class AuthController {
     private readonly authService;
     private readonly configService;
@@ -12,7 +12,7 @@ export declare class AuthController {
     private readonly jwtService;
     private readonly logger;
     constructor(authService: AuthService, configService: ConfigService, tokenBlacklistService: TokenBlacklistService, jwtService: JwtService);
-    register(registerDto: RegisterDto): Promise<{
+    register(createRegisterDto: CreateRegisterDto): Promise<{
         message: string;
         user: {
             id: number;
@@ -32,12 +32,12 @@ export declare class AuthController {
         };
     }>;
     getProfile(user: any, req: Request): Promise<{
-        role: string;
-        id: number;
         email: string;
-        googleId: string | null;
         firstName: string | null;
         lastName: string | null;
+        id: number;
+        googleId: string | null;
+        role: string;
         profilePicture: string | null;
         createdAt: Date | null;
         updatedAt: Date | null;
