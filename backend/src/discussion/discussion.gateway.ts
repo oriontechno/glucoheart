@@ -24,7 +24,14 @@ interface AuthedSocket extends Socket {
   data: { user?: { id: number; role?: string } };
 }
 
-@WebSocketGateway({ namespace: '/discussion', cors: true })
+@WebSocketGateway({ 
+  namespace: '/discussion', 
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+    credentials: true,
+  }
+})
 export class DiscussionGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
