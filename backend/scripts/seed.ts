@@ -5,7 +5,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { and, eq } from 'drizzle-orm';
 import * as schema from '../src/db/schema';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import * as argon2 from 'argon2';
+import * as bcrypt from 'bcrypt';
 
 // Types
 type DB = NodePgDatabase<typeof import('../src/db/schema')>;
@@ -38,7 +38,7 @@ async function upsertUser(
   }
 
   // 2) insert user baru
-  const hash = await argon2.hash(password, { type: argon2.argon2id });
+  const hash = await bcrypt.hash(password, 10);
 
   // ⬇️ Jika hash col kamu bernama `password_hash`, ganti key 'passwordHash' di values() jadi 'password_hash'
   const [row] = await db
