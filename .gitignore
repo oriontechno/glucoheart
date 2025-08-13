@@ -1,0 +1,6 @@
+# Build artifacts
+backend/dist/
+*.tsbuildinfo
+
+# Dependencies
+backend/node_modules/
