@@ -18,12 +18,13 @@ async function upsertUser(
   db: DB,
   params: {
     email: string;
-    name: string;
+    firstName: string;
+    lastName: string;
     role: 'ADMIN' | 'SUPPORT' | 'NURSE' | 'USER';
     password: string;
   },
 ) {
-  const { email, name, role, password } = params;
+  const { email, firstName, lastName, role, password } = params;
 
   // 1) cek apakah ada
   const existing = await db
@@ -33,7 +34,7 @@ async function upsertUser(
     .limit(1);
 
   if (existing.length > 0) {
-    return { id: existing[0]!.id, email, name, role };
+    return { id: existing[0]!.id, email, firstName, lastName, role };
   }
 
   // 2) insert user baru
@@ -44,52 +45,59 @@ async function upsertUser(
     .insert(schema.users as any)
     .values({
       email,
-      name,
+      firstName,
+      lastName,
       role,
-      passwordHash: hash, // ← ganti ke password_hash kalau schema kamu snake_case
+      password: hash, // ← ganti ke password_hash kalau schema kamu snake_case
       createdAt: new Date(),
       updatedAt: new Date(),
     } as any)
     .returning({ id: schema.users.id });
 
-  return { id: row.id, email, name, role };
+  return { id: row.id, email, firstName, lastName, role };
 }
 
 async function seedUsers(db: DB) {
   console.log('Seeding users...');
   const admin = await upsertUser(db, {
     email: 'admin@example.com',
-    name: 'Admin',
+    firstName: 'Admin',
+    lastName: 'User',
     role: 'ADMIN',
     password: 'Password123!',
   });
   const support = await upsertUser(db, {
     email: 'support@example.com',
-    name: 'Support',
+    firstName: 'Support',
+    lastName: 'User',
     role: 'SUPPORT',
     password: 'Password123!',
   });
   const nurse = await upsertUser(db, {
     email: 'nurse@example.com',
-    name: 'Nurse',
+    firstName: 'Nurse',
+    lastName: 'User',
     role: 'NURSE',
     password: 'Password123!',
   });
   const alice = await upsertUser(db, {
     email: 'alice@example.com',
-    name: 'Alice',
+    firstName: 'Alice',
+    lastName: 'User',
     role: 'USER',
     password: 'Password123!',
   });
   const bob = await upsertUser(db, {
     email: 'bob@example.com',
-    name: 'Bob',
+    firstName: 'Bob',
+    lastName: 'User',
     role: 'USER',
     password: 'Password123!',
   });
   const charlie = await upsertUser(db, {
     email: 'charlie@example.com',
-    name: 'Charlie',
+    firstName: 'Charlie',
+    lastName: 'User',
     role: 'USER',
     password: 'Password123!',
   });
