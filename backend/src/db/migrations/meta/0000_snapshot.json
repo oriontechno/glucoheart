@@ -1,5 +1,5 @@
 {
-  "id": "f5bfd339-69ac-4887-ad9d-807681a4edee",
+  "id": "bc992719-6d3f-4b16-aa6c-c30f0a722c97",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -20,27 +20,84 @@
           "primaryKey": false,
           "notNull": true
         },
-        "image_url": {
-          "name": "image_url",
-          "type": "varchar(255)",
+        "url": {
+          "name": "url",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "caption": {
-          "name": "caption",
-          "type": "varchar(255)",
+        "storage_key": {
+          "name": "storage_key",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
+        "alt": {
+          "name": "alt",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "is_cover": {
+          "name": "is_cover",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": false,
-          "default": "CURRENT_TIMESTAMP"
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_article_images_article": {
+          "name": "idx_article_images_article",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_article_images_position": {
+          "name": "idx_article_images_position",
+          "columns": [
+            {
+              "expression": "article_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "article_images_article_id_articles_id_fk": {
           "name": "article_images_article_id_articles_id_fk",
@@ -53,7 +110,7 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -74,18 +131,12 @@
         },
         "title": {
           "name": "title",
-          "type": "varchar(255)",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
         "slug": {
           "name": "slug",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "content": {
-          "name": "content",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -96,65 +147,136 @@
           "primaryKey": false,
           "notNull": false
         },
-        "cover_image": {
-          "name": "cover_image",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "author_id": {
-          "name": "author_id",
-          "type": "integer",
+        "content": {
+          "name": "content",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
+        "status": {
+          "name": "status",
+          "type": "article_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'draft'"
+        },
+        "cover_image_id": {
+          "name": "cover_image_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "published_at": {
           "name": "published_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "uq_articles_slug": {
+          "name": "uq_articles_slug",
+          "columns": [
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_articles_status": {
+          "name": "idx_articles_status",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_articles_published_at": {
+          "name": "idx_articles_published_at",
+          "columns": [
+            {
+              "expression": "published_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "articles_author_id_users_id_fk": {
-          "name": "articles_author_id_users_id_fk",
+        "articles_created_by_users_id_fk": {
+          "name": "articles_created_by_users_id_fk",
           "tableFrom": "articles",
           "tableTo": "users",
           "columnsFrom": [
-            "author_id"
+            "created_by"
           ],
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onDelete": "set null",
+          "onUpdate": "cascade"
+        },
+        "articles_updated_by_users_id_fk": {
+          "name": "articles_updated_by_users_id_fk",
+          "tableFrom": "articles",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "articles_slug_unique": {
-          "name": "articles_slug_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "slug"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -920,6 +1042,14 @@
     }
   },
   "enums": {
+    "public.article_status": {
+      "name": "article_status",
+      "schema": "public",
+      "values": [
+        "draft",
+        "published"
+      ]
+    },
     "public.chat_session_type": {
       "name": "chat_session_type",
       "schema": "public",
