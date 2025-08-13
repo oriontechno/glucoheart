@@ -1,26 +1,31 @@
+CREATE TYPE "public"."article_status" AS ENUM('draft', 'published');--> statement-breakpoint
 CREATE TYPE "public"."chat_session_type" AS ENUM('one_to_one', 'group');--> statement-breakpoint
 CREATE TYPE "public"."chat_participant_role" AS ENUM('member', 'nurse');--> statement-breakpoint
 CREATE TYPE "public"."role" AS ENUM('USER', 'NURSE', 'ADMIN', 'SUPPORT');--> statement-breakpoint
 CREATE TABLE "article_images" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"article_id" integer NOT NULL,
-	"image_url" varchar(255) NOT NULL,
-	"caption" varchar(255),
-	"created_at" timestamp DEFAULT CURRENT_TIMESTAMP
+	"url" text NOT NULL,
+	"storage_key" text,
+	"alt" text,
+	"is_cover" boolean DEFAULT false NOT NULL,
+	"position" integer DEFAULT 0 NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "articles" (
 	"id" serial PRIMARY KEY NOT NULL,
-	"title" varchar(255) NOT NULL,
-	"slug" varchar(255) NOT NULL,
-	"content" text NOT NULL,
+	"title" text NOT NULL,
+	"slug" text NOT NULL,
 	"summary" text,
-	"cover_image" varchar(255),
-	"author_id" integer NOT NULL,
-	"published_at" timestamp,
-	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "articles_slug_unique" UNIQUE("slug")
+	"content" text NOT NULL,
+	"status" "article_status" DEFAULT 'draft' NOT NULL,
+	"cover_image_id" integer,
+	"created_by" integer,
+	"updated_by" integer,
+	"published_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "chat_session_participants" (
@@ -93,8 +98,9 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
-ALTER TABLE "article_images" ADD CONSTRAINT "article_images_article_id_articles_id_fk" FOREIGN KEY ("article_id") REFERENCES "public"."articles"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "articles" ADD CONSTRAINT "articles_author_id_users_id_fk" FOREIGN KEY ("author_id") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "article_images" ADD CONSTRAINT "article_images_article_id_articles_id_fk" FOREIGN KEY ("article_id") REFERENCES "public"."articles"("id") ON DELETE cascade ON UPDATE cascade;--> statement-breakpoint
+ALTER TABLE "articles" ADD CONSTRAINT "articles_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE cascade;--> statement-breakpoint
+ALTER TABLE "articles" ADD CONSTRAINT "articles_updated_by_users_id_fk" FOREIGN KEY ("updated_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE cascade;--> statement-breakpoint
 ALTER TABLE "chat_session_participants" ADD CONSTRAINT "chat_session_participants_session_id_chat_sessions_id_fk" FOREIGN KEY ("session_id") REFERENCES "public"."chat_sessions"("id") ON DELETE cascade ON UPDATE cascade;--> statement-breakpoint
 ALTER TABLE "chat_session_participants" ADD CONSTRAINT "chat_session_participants_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE cascade;--> statement-breakpoint
 ALTER TABLE "chat_sessions" ADD CONSTRAINT "chat_sessions_user_a_id_users_id_fk" FOREIGN KEY ("user_a_id") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE cascade;--> statement-breakpoint
@@ -107,6 +113,11 @@ ALTER TABLE "discussion_messages" ADD CONSTRAINT "discussion_messages_sender_id_
 ALTER TABLE "discussion_participants" ADD CONSTRAINT "discussion_participants_room_id_discussion_rooms_id_fk" FOREIGN KEY ("room_id") REFERENCES "public"."discussion_rooms"("id") ON DELETE cascade ON UPDATE cascade;--> statement-breakpoint
 ALTER TABLE "discussion_participants" ADD CONSTRAINT "discussion_participants_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE cascade;--> statement-breakpoint
 ALTER TABLE "discussion_rooms" ADD CONSTRAINT "discussion_rooms_created_by_users_id_fk" FOREIGN KEY ("created_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE cascade;--> statement-breakpoint
+CREATE INDEX "idx_article_images_article" ON "article_images" USING btree ("article_id");--> statement-breakpoint
+CREATE INDEX "idx_article_images_position" ON "article_images" USING btree ("article_id","position");--> statement-breakpoint
+CREATE UNIQUE INDEX "uq_articles_slug" ON "articles" USING btree ("slug");--> statement-breakpoint
+CREATE INDEX "idx_articles_status" ON "articles" USING btree ("status");--> statement-breakpoint
+CREATE INDEX "idx_articles_published_at" ON "articles" USING btree ("published_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_chat_session_participant_unique" ON "chat_session_participants" USING btree ("session_id","user_id");--> statement-breakpoint
 CREATE INDEX "idx_chat_session_participants_session" ON "chat_session_participants" USING btree ("session_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_chat_sessions_one_to_one_pair_unique" ON "chat_sessions" USING btree ("type","user_a_id","user_b_id");--> statement-breakpoint
