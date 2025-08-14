@@ -3,6 +3,6 @@ export type User = {
   firstName: string;
   lastName: string;
   email: string;
-  role: 'user' | 'super_admin';
+  role: 'USER' | 'ADMIN' | 'NURSE' | 'SUPPORT';
   created_at: string;
 };
