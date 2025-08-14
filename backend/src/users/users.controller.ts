@@ -37,7 +37,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('admin', 'superadmin')
+  @Roles('ADMIN', 'SUPPORT')
   @ZodValidation(createUserSchema)
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
     return this.usersService.create(createUserDto, req.user.role);
