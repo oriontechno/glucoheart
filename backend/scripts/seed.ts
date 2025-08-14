@@ -5,7 +5,6 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { and, eq } from 'drizzle-orm';
 import * as argon2 from 'argon2';
-
 // 🚩 Sesuaikan path ini dengan project kamu:
 import * as schema from '../src/db/schema';
 import {
@@ -83,6 +82,7 @@ function normalizePair(a: number, b: number) {
 // ---------- Seed helpers ----------
 async function upsertUser(
   db: DB,
+
   u: SeedUser,
   hashedPassword: string,
   opts?: { overwriteExistingPassword?: boolean },
@@ -129,6 +129,7 @@ async function upsertUser(
 
 async function seedUsers(db: DB) {
   console.log('Seeding users...');
+
   const hashed = await argon2.hash('glucoheart321', { type: argon2.argon2id });
 
   const ids: Record<string, number> = {};
@@ -147,7 +148,6 @@ async function seedUsers(db: DB) {
     bobId: ids['bob@gmail.com'],
     charlieId: ids['charlie@gmail.com'],
   };
-}
 
 async function seedArticles(db: DB, who: { adminId: number }) {
   console.log('Seeding articles...');
