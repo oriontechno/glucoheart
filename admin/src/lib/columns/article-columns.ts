@@ -2,7 +2,9 @@ import { ColumnDef } from '@tanstack/react-table';
 import { Article } from '@/constants/mock-api';
 
 // Server-safe column definition factory
-export function createArticleColumnsConfig(categoryOptions: Array<{value: string, label: string}> = []) {
+export function createArticleColumnsConfig(
+  categoryOptions: Array<{ value: string; label: string }> = []
+) {
   return {
     imageColumn: {
       accessorKey: 'image_url',
@@ -44,4 +46,6 @@ export function createArticleColumnsConfig(categoryOptions: Array<{value: string
   };
 }
 
-export type ArticleColumnsConfig = ReturnType<typeof createArticleColumnsConfig>;
+export type ArticleColumnsConfig = ReturnType<
+  typeof createArticleColumnsConfig
+>;

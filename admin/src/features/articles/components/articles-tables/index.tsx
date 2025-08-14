@@ -2,7 +2,10 @@
 
 import { DataTable } from '@/components/ui/table/data-table';
 import { DataTableToolbar } from '@/components/ui/table/data-table-toolbar';
-import { createArticleColumnsFromConfig, type ArticleColumnsConfig } from './columns';
+import {
+  createArticleColumnsFromConfig,
+  type ArticleColumnsConfig
+} from './columns';
 
 import { useDataTable } from '@/hooks/use-data-table';
 
@@ -27,8 +30,11 @@ export function ArticlesTable<TData, TValue>({
   const pageCount = Math.ceil(totalItems / pageSize);
 
   // Use columns from config if provided, otherwise use direct columns
-  const tableColumns = columnsConfig 
-    ? createArticleColumnsFromConfig(columnsConfig) as ColumnDef<TData, TValue>[]
+  const tableColumns = columnsConfig
+    ? (createArticleColumnsFromConfig(columnsConfig) as ColumnDef<
+        TData,
+        TValue
+      >[])
     : columns!;
 
   const { table } = useDataTable({
