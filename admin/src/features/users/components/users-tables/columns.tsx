@@ -4,25 +4,38 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { CheckCircle2, Text, XCircle } from 'lucide-react';
 import { CellAction } from './cell-action';
-import { ACTIVE_OPTIONS, ROLE_OPTIONS } from './options';
-import { User } from '@/constants/mock-api';
+import { ROLE_OPTIONS } from './options';
+import { User } from '@/types/entity';
 
 export const columns: ColumnDef<User>[] = [
   {
-    id: 'name',
-    accessorKey: 'name',
+    id: 'search',
+    accessorKey: 'firstName',
     header: ({ column }: { column: Column<User, unknown> }) => (
-      <DataTableColumnHeader column={column} title='Name' />
+      <DataTableColumnHeader column={column} title='First Name' />
     ),
-    cell: ({ cell }) => <div>{cell.getValue<User['name']>()}</div>,
+    cell: ({ cell }) => <div>{cell.getValue<User['firstName']>()}</div>,
     meta: {
-      label: 'Name',
+      label: 'First Name',
       placeholder: 'Search ...',
       variant: 'text',
       icon: Text
     },
     enableColumnFilter: true,
     enableSorting: true
+  },
+  {
+    id: 'lastName',
+    accessorKey: 'lastName',
+    header: ({ column }: { column: Column<User, unknown> }) => (
+      <DataTableColumnHeader column={column} title='Last Name' />
+    ),
+    cell: ({ cell }) => <div>{cell.getValue<User['lastName']>()}</div>,
+    enableColumnFilter: true,
+    enableSorting: true,
+    meta: {
+      label: 'Last Name'
+    }
   },
   {
     id: 'email',
@@ -32,7 +45,10 @@ export const columns: ColumnDef<User>[] = [
     ),
     cell: ({ cell }) => <div>{cell.getValue<User['email']>()}</div>,
     enableColumnFilter: true,
-    enableSorting: true
+    enableSorting: true,
+    meta: {
+      label: 'Email'
+    }
   },
   {
     id: 'role',
@@ -60,41 +76,14 @@ export const columns: ColumnDef<User>[] = [
     }
   },
   {
-    id: 'active',
-    accessorKey: 'is_active',
-    header: ({ column }: { column: Column<User, unknown> }) => (
-      <DataTableColumnHeader column={column} title='Active' />
-    ),
-    enableColumnFilter: true,
-    enableSorting: true,
-    meta: {
-      label: 'Active',
-      variant: 'select',
-      options: ACTIVE_OPTIONS.map((option) => ({
-        ...option,
-        value: String(option.value)
-      }))
-    },
-    cell: ({ row }) => {
-      const isActive = row.getValue('active');
-      console.log('isActive', isActive);
-      return (
-        <div>
-          {isActive ? (
-            <Badge variant='destructive'>Active</Badge>
-          ) : (
-            <Badge>Inactive</Badge>
-          )}
-        </div>
-      );
-    }
-  },
-  {
     accessorKey: 'created_at',
     header: ({ column }: { column: Column<User, unknown> }) => (
       <DataTableColumnHeader column={column} title='Created At' />
     ),
     enableSorting: true,
+    meta: {
+      label: 'Created At'
+    },
     cell: ({ row }) => {
       const createdAt = row.getValue('created_at');
       return (

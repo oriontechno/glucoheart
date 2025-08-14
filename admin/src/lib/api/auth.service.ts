@@ -1,3 +1,5 @@
+import { tokenService } from './token.service';
+
 interface SignInRequest {
   email: string;
   password: string;
@@ -49,6 +51,19 @@ export const authService = {
         } as ErrorResponse;
       }
 
+      // Get token from session after successful login
+      const sessionResponse = await fetch('/api/auth/session', {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (sessionResponse.ok) {
+        const sessionData = await sessionResponse.json();
+        if (sessionData.access_token) {
+          tokenService.setToken(sessionData.access_token);
+        }
+      }
+
       return data;
     } catch (error) {
       // Handle fetch errors
@@ -66,6 +81,9 @@ export const authService = {
 
   signOut: async (): Promise<void> => {
     try {
+      // Clear token from memory first
+      tokenService.clearToken();
+
       const response = await fetch('/api/auth/logout', {
         method: 'POST',
         headers: {
