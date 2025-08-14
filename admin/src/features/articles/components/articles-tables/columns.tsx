@@ -3,45 +3,21 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { Text } from 'lucide-react';
 import { CellAction } from './cell-action';
-import { Article, fakeArticleCategories } from '@/constants/mock-api';
+import { Article } from '@/constants/mock-api';
+import { getArticleCategoriesSync } from '@/lib/api/article-categories.service';
+import {
+  createArticleColumnsConfig,
+  type ArticleColumnsConfig
+} from '@/lib/columns/article-columns';
 import Image from 'next/image';
 
-// Helper function to ensure categories are available and convert to options format
-const formatCategoriesAsOptions = (categories: any[]) => {
-  return categories.map((category) => ({
-    value: category.name,
-    label: category.name.charAt(0).toUpperCase() + category.name.slice(1)
-  }));
-};
+// Re-export the type for convenience
+export type { ArticleColumnsConfig };
 
-// Function for async operations (recommended approach)
-export const getArticleCategoriesFromMockData = async () => {
-  try {
-    // Use the proper getAll method from mock API
-    const categories = await fakeArticleCategories.getAll({});
-    return formatCategoriesAsOptions(categories);
-  } catch (error) {
-    // Fallback: ensure initialization and try again
-    fakeArticleCategories.initialize();
-    const categories = await fakeArticleCategories.getAll({});
-    return formatCategoriesAsOptions(categories);
-  }
-};
-
-// Legacy function for synchronous access (only for table columns)
-const getCategoriesSync = () => {
-  // Ensure categories are initialized
-  if (fakeArticleCategories.records.length === 0) {
-    fakeArticleCategories.initialize();
-  }
-
-  return formatCategoriesAsOptions(fakeArticleCategories.records);
-};
-
-// Get article category options for table columns (synchronous)
-const ARTICLE_CATEGORY_OPTIONS = getCategoriesSync();
-
-export const columns: ColumnDef<Article>[] = [
+// Client-side columns implementation using server config
+export const createArticleColumnsFromConfig = (
+  config: ArticleColumnsConfig
+): ColumnDef<Article>[] => [
   {
     accessorKey: 'image_url',
     header: 'IMAGE',
@@ -82,7 +58,7 @@ export const columns: ColumnDef<Article>[] = [
     ),
     cell: ({ cell }) => {
       const categoryValue = cell.getValue<Article['category']>();
-      const categoryOption = ARTICLE_CATEGORY_OPTIONS.find(
+      const categoryOption = config.categoryOptions.find(
         (option) => option.value === categoryValue
       );
       return <div>{categoryOption?.label || categoryValue}</div>;
@@ -92,7 +68,7 @@ export const columns: ColumnDef<Article>[] = [
     meta: {
       label: 'Category',
       variant: 'select',
-      options: ARTICLE_CATEGORY_OPTIONS.map((option) => ({
+      options: config.categoryOptions.map((option) => ({
         ...option,
         value: String(option.value)
       }))
@@ -124,9 +100,22 @@ export const columns: ColumnDef<Article>[] = [
       );
     }
   },
-
   {
     id: 'actions',
     cell: ({ row }) => <CellAction data={row.original} />
   }
 ];
+
+// Dynamic columns function that accepts categories (backward compatibility)
+export const createArticleColumns = (
+  categoryOptions: Array<{ value: string; label: string }> = []
+): ColumnDef<Article>[] => {
+  const config = createArticleColumnsConfig(categoryOptions);
+  return createArticleColumnsFromConfig(config);
+};
+
+// Fallback columns with safe category loading for backward compatibility
+export const columns: ColumnDef<Article>[] = (() => {
+  const categoryOptions = getArticleCategoriesSync();
+  return createArticleColumns(categoryOptions);
+})();

@@ -1,5 +1,6 @@
 import { searchParamsCache } from '@/lib/searchparams';
-import { columns } from './articles-tables/columns';
+import { createArticleColumnsConfig } from '@/lib/columns/article-columns';
+import { getArticleCategoriesFromMockData } from '@/lib/api/article-categories.service';
 import { ArticlesTable } from './articles-tables';
 import { fakeArticles } from '@/constants/mock-api';
 
@@ -24,6 +25,12 @@ export default async function ArticlesListingPage({}: ArticlesListingPageProps) 
     ...(sort && { sort })
   };
 
+  // Fetch categories from server for columns
+  const categoryOptions = await getArticleCategoriesFromMockData();
+
+  // Create server-safe column config (no client components)
+  const columnsConfig = createArticleColumnsConfig(categoryOptions);
+
   const data = await fakeArticles.getArticles(filters);
   const data2 = await ArticlesServerService.getAdminArticles(filters);
   console.log({ data2 });
@@ -34,7 +41,7 @@ export default async function ArticlesListingPage({}: ArticlesListingPageProps) 
     <ArticlesTable
       data={articles}
       totalItems={totalArticles}
-      columns={columns}
+      columnsConfig={columnsConfig}
     />
   );
 }
