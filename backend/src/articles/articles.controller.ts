@@ -28,6 +28,8 @@ import {
   type UpdateArticleDto,
   type AttachImageDto,
 } from './schema/articles.schema';
+import { SetArticleCategoriesDto } from './dto/set-article-categories.dto';
+import { CreateCategoryDto } from './dto/create-category.dto';
 
 function ensureUploadDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -63,6 +65,71 @@ const multerImageOptions = {
 @Controller('articles')
 export class ArticlesController {
   constructor(private readonly svc: ArticlesService) {}
+
+  // Update existing list/search to accept ?categories=slug1.slug2
+  @Get('all')
+  async getAllSimple(
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+    @Query('categories') categories?: string,
+  ) {
+    return this.svc.findAllSimple({
+      status,
+      search,
+      limit: Number(limit),
+      categories,
+    });
+  }
+
+  @Get('search')
+  async getSearch(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('sort') sort?: string,
+    @Query('scope') scope?: 'public' | 'admin',
+    @Query('categories') categories?: string,
+  ) {
+    const realScope: 'public' | 'admin' =
+      scope === 'admin' ? 'admin' : 'public';
+    return this.svc.findPaginated({
+      page: Number(page),
+      limit: Number(limit),
+      status,
+      search,
+      sort,
+      scope: realScope,
+      categories,
+    });
+  }
+
+  @Get('categories')
+  async listCategories(
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.svc.listCategories(
+      q,
+      Number(limit ?? 100),
+      Number(offset ?? 0),
+    );
+  }
+
+  @Post(':id/categories')
+  async setArticleCategories(
+    @Req() req: Request & { user: { id: number; role?: string } },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: SetArticleCategoriesDto,
+  ) {
+    return this.svc.setArticleCategories(
+      { id: req.user.id, role: req.user.role },
+      id,
+      body.categories || [],
+    );
+  }
 
   // ===== Admin/Support =====
   @Post()
@@ -195,5 +262,17 @@ export class ArticlesController {
   ) {
     const { user } = req;
     return this.svc.getByIdForAdmin({ id: user.id, role: user.role }, id);
+  }
+
+  // Categories
+  @Post('categories')
+  async createCategory(
+    @Req() req: Request & { user: { id: number; role?: string } },
+    @Body() dto: CreateCategoryDto,
+  ) {
+    return this.svc.createCategory(
+      { id: req.user.id, role: req.user.role },
+      dto,
+    );
   }
 }
