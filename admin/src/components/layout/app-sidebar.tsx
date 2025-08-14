@@ -63,9 +63,10 @@ const tenants = [
 export default function AppSidebar() {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
-  // const { user } = useUser();
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = React.useState(false);
+  const [user, setUser] = React.useState<any>(null);
+  const [isLoadingUser, setIsLoadingUser] = React.useState(true);
 
   const handleSwitchTenant = (_tenantId: string) => {
     // Tenant switching functionality would be implemented here
@@ -87,6 +88,24 @@ export default function AppSidebar() {
       setIsSigningOut(false);
     }
   };
+
+  // Fetch user session data
+  React.useEffect(() => {
+    const fetchUserSession = async () => {
+      try {
+        const session = await authService.getSession();
+        if (session?.user) {
+          setUser(session.user);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user session:', error);
+      } finally {
+        setIsLoadingUser(false);
+      }
+    };
+
+    fetchUserSession();
+  }, []);
 
   const activeTenant = tenants[0];
 
@@ -171,14 +190,21 @@ export default function AppSidebar() {
                 <SidebarMenuButton
                   size='lg'
                   className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
+                  disabled={isLoadingUser}
                 >
                   <UserAvatarProfile
                     className='h-8 w-8 rounded-lg'
                     showInfo
                     user={{
-                      emailAddresses: [{ emailAddress: 'admin@gmail.com' }],
-                      fullName: 'Admin User'
-                      // imageUrl: 'https://example.com/avatar.jpg'
+                      emailAddresses: [
+                        {
+                          emailAddress: user?.email || 'Loading...'
+                        }
+                      ],
+                      fullName: user
+                        ? `${user.firstName} ${user.lastName}`
+                        : 'Loading...',
+                      imageUrl: user?.profilePicture || undefined
                     }}
                   />
                   <IconChevronsDown className='ml-auto size-4' />
@@ -192,15 +218,24 @@ export default function AppSidebar() {
               >
                 <DropdownMenuLabel className='p-0 font-normal'>
                   <div className='px-1 py-1.5'>
-                    <UserAvatarProfile
-                      className='h-8 w-8 rounded-lg'
-                      showInfo
-                      user={{
-                        emailAddresses: [{ emailAddress: 'admin@gmail.com' }],
-                        fullName: 'Admin User'
-                        // imageUrl: 'https://example.com/avatar.jpg'
-                      }}
-                    />
+                    <div className='flex flex-col space-y-1 leading-none'>
+                      <UserAvatarProfile
+                        className='h-8 w-8 rounded-lg'
+                        showInfo
+                        user={{
+                          emailAddresses: [
+                            {
+                              emailAddress: user?.email || 'Loading...'
+                            }
+                          ],
+                          fullName: user
+                            ? `${user.firstName} ${user.lastName}`
+                            : 'Loading...',
+                          imageUrl: user?.profilePicture || undefined,
+                          role: user?.role
+                        }}
+                      />
+                    </div>
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
