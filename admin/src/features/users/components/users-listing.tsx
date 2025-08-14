@@ -10,7 +10,7 @@ type UsersListingPage = {};
 export default async function UsersListingPage({}: UsersListingPage) {
   // Showcasing the use of search params cache in nested RSCs
   const page = searchParamsCache.get('page');
-  const search = searchParamsCache.get('name');
+  const search = searchParamsCache.get('search');
   const pageLimit = searchParamsCache.get('perPage');
   const roles = searchParamsCache.get('role');
   const actives = searchParamsCache.get('active');
