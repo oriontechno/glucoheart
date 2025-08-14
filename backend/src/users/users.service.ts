@@ -41,6 +41,8 @@ export class UsersService {
     return u.passwordHash as string;
   }
 
+  // --- Helpers aman ---
+
   private parseRoles(roles?: string): string[] | null {
     if (!roles) return null;
     const list = roles
@@ -51,86 +53,89 @@ export class UsersService {
     return list.length ? list : null;
   }
 
-  private buildWhere({ roles, search }: { roles?: string; search?: string }) {
+  private buildWhere(params: { roles?: string; search?: string }) {
     const conds: any[] = [];
 
-    const parsed = this.parseRoles(roles);
-    if (parsed) {
-      // If your schema uses users.role (TEXT)
-      conds.push(inArray((users as any).role, parsed as any));
-      // If you use a roles table, replace with a JOIN and filter on roles.name IN (...)
-    }
+    // roles filter: enum users.role
+    const parsed = this.parseRoles(params.roles);
+    if (parsed) conds.push(inArray(users.role, parsed as any));
 
-    if (search) {
-      const q = `%${search}%`;
-      const nameCol =
-        (users as any).name ??
-        (users as any).fullName ??
-        (users as any).displayName;
-      const emailCol = (users as any).email;
-      if (nameCol && emailCol) {
-        conds.push(sql`(${nameCol} ILIKE ${q} OR ${emailCol} ILIKE ${q})`);
-      } else if (emailCol) {
-        conds.push(ilike(emailCol, q));
-      }
-    }
-
-    if (!conds.length) return sql`true`;
-    return and(...(conds as any));
-  }
-
-  async findAllSimple(params: { roles?: string; search?: string }) {
-    const where = this.buildWhere(params);
-    const rows = await this.db
-      .select({
-        id: users.id,
-        name: (users as any).name,
-        email: (users as any).email,
-        role: (users as any).role,
-        createdAt: (users as any).createdAt ?? (users as any).created_at,
-      })
-      .from(users as any)
-      .where(where)
-      .orderBy(
-        desc((users as any).createdAt ?? (users as any).created_at ?? users.id),
+    // search by email / firstName / lastName
+    if (params.search) {
+      const q = `%${params.search}%`;
+      conds.push(
+        sql`(
+          ${users.email} ILIKE ${q}
+          OR ${users.firstName} ILIKE ${q}
+          OR ${users.lastName} ILIKE ${q}
+        )`,
       );
+    }
 
-    return rows.map((r: any) => ({
-      id: r.id,
-      name: r.name ?? null,
-      email: r.email ?? null,
-      role: r.role ?? null,
-      created_at: (r.createdAt ?? null) as any,
-    }));
+    return conds.length ? and(...conds) : sql`true`;
   }
 
   private parseSort(sort?: string) {
-    // Expect sort as JSON string like: [{"id":"name","desc":false}]
+    // dukung kunci: id, first_name, last_name, email, created_at, role
     const allowed: Record<string, any> = {
       id: users.id,
-      name: (users as any).name,
-      email: (users as any).email,
-      created_at:
-        (users as any).createdAt ?? (users as any).created_at ?? users.id,
-      role: (users as any).role,
+      first_name: users.firstName,
+      last_name: users.lastName,
+      firstName: users.firstName, // kompatibel
+      lastName: users.lastName, // kompatibel
+      email: users.email,
+      created_at: users.createdAt,
+      role: users.role,
     };
 
-    if (!sort) return [desc(allowed.created_at)];
+    const def = users.createdAt;
+
+    if (!sort) return [desc(def)];
     try {
       const arr = JSON.parse(sort);
-      if (!Array.isArray(arr) || !arr.length) return [desc(allowed.created_at)];
+      if (!Array.isArray(arr) || !arr.length) return [desc(def)];
       const orderBys: any[] = [];
       for (const item of arr) {
-        const col = allowed[item.id];
+        const col = allowed[item?.id as string];
         if (!col) continue;
-        orderBys.push(item.desc ? desc(col) : asc(col));
+        orderBys.push(item?.desc ? desc(col) : asc(col));
       }
-      return orderBys.length ? orderBys : [desc(allowed.created_at)];
+      return orderBys.length ? orderBys : [desc(def)];
     } catch {
-      return [desc(allowed.created_at)];
+      return [desc(def)];
     }
   }
 
+  // === GET /users/all ===
+  async findAllSimple(params: { roles?: string; search?: string }) {
+    const where = this.buildWhere(params);
+
+    const rows = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        createdAt: users.createdAt,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profilePicture: users.profilePicture,
+      })
+      .from(users)
+      .where(where)
+      .orderBy(desc(users.createdAt));
+
+    return rows.map((r) => ({
+      id: r.id,
+      firstName: r.firstName ?? null,
+      lastName: r.lastName ?? null,
+      email: r.email ?? null,
+      role: r.role ?? null,
+      profilePicture: r.profilePicture ?? null,
+      created_at: r.createdAt ?? null,
+    }));
+  }
+
+  // === GET /users (paginate + sort) ===
   async findPaginated(params: {
     page?: number;
     limit?: number;
@@ -146,20 +151,21 @@ export class UsersService {
     const orderBys = this.parseSort(params.sort);
 
     const totalRows = await this.db
-      .select({ c: sql<string>`count(*)` })
-      .from(users as any)
+      .select({ c: sql<number>`count(*)::int` })
+      .from(users)
       .where(where);
-    const total = Number(totalRows[0]?.c ?? '0');
 
     const rows = await this.db
       .select({
         id: users.id,
-        name: (users as any).name,
-        email: (users as any).email,
-        role: (users as any).role,
-        createdAt: (users as any).createdAt ?? (users as any).created_at,
+        email: users.email,
+        role: users.role,
+        createdAt: users.createdAt,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profilePicture: users.profilePicture,
       })
-      .from(users as any)
+      .from(users)
       .where(where)
       .orderBy(...orderBys)
       .limit(limit)
@@ -169,15 +175,17 @@ export class UsersService {
       success: true,
       time: new Date().toISOString(),
       message: 'Sample user data for testing and learning purposes',
-      total_users: total,
+      total_users: totalRows[0]?.c ?? 0,
       offset,
       limit,
-      users: rows.map((r: any) => ({
+      users: rows.map((r) => ({
         id: r.id,
-        name: r.name ?? null,
+        firstName: r.firstName ?? null,
+        lastName: r.lastName ?? null,
         email: r.email ?? null,
         role: r.role ?? null,
-        created_at: (r.createdAt ?? null) as any,
+        profilePicture: r.profilePicture ?? null,
+        created_at: r.createdAt ?? null,
       })),
     };
   }
