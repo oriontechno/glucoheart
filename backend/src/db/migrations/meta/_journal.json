@@ -15,6 +15,13 @@
       "when": 1754922037759,
       "tag": "0001_natural_madame_hydra",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1755178455402,
+      "tag": "0002_thankful_reavers",
+      "breakpoints": true
     }
   ]
 }

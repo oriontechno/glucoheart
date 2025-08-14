@@ -6,6 +6,7 @@ import {
   Body,
   Req,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { DiscussionService } from './discussion.service';
 import { ZodValidation } from '../zod/zod-validation.decorator';
@@ -21,6 +22,40 @@ import { RequestUser } from './types';
 @Controller('discussion')
 export class DiscussionController {
   constructor(private readonly svc: DiscussionService) {}
+
+  @Get('all')
+  async getAllSimple(
+    @Query('search') search?: string,
+    @Query('isPublic') isPublic?: string,
+    @Query('createdBy') createdBy?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.svc.findAllSimple({
+      search,
+      isPublic,
+      createdBy,
+      limit: Number(limit),
+    });
+  }
+
+  @Get('search')
+  async getSearch(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('isPublic') isPublic?: string,
+    @Query('createdBy') createdBy?: string,
+    @Query('sort') sort?: string,
+  ) {
+    return this.svc.findPaginated({
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      isPublic,
+      createdBy,
+      sort,
+    });
+  }
 
   // Create public room (ADMIN only)
   @Post('rooms')
