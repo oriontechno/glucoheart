@@ -79,10 +79,10 @@ export default function UserAuthForm() {
         }
 
         // Set general error message
-        setError(err.message || 'Login failed. Please try again.');
+        setError(err.error || 'Login failed. Please try again.');
 
         // Show toast for immediate feedback
-        toast.error(err.message || 'Login failed. Please try again.');
+        toast.error(err.error || 'Login failed. Please try again.');
       }
     });
   };
