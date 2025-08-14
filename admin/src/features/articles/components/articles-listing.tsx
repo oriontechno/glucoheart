@@ -4,6 +4,7 @@ import { ArticlesTable } from './articles-tables';
 import { fakeArticles } from '@/constants/mock-api';
 
 import type { Article } from '@/constants/mock-api';
+import { ArticlesServerService } from '@/lib/api/articles.server.service';
 
 type ArticlesListingPageProps = {};
 
@@ -24,6 +25,8 @@ export default async function ArticlesListingPage({}: ArticlesListingPageProps) 
   };
 
   const data = await fakeArticles.getArticles(filters);
+  const data2 = await ArticlesServerService.getAdminArticles(filters);
+  console.log({ data2 });
   const totalArticles = data.total_articles;
   const articles: Article[] = data.articles;
 
