@@ -74,28 +74,9 @@ export class DiscussionController {
     return this.svc.listRooms();
   }
 
-  // Join / leave
-  @Post('rooms/:roomId/join')
-  async joinRoom(
-    @Req() req: Request & { user: RequestUser },
-    @Param('roomId', ParseIntPipe) roomId: number,
-  ) {
-    const { user } = req;
-    return this.svc.joinRoom(roomId, user.id);
-  }
-
-  @Post('rooms/:roomId/leave')
-  async leaveRoom(
-    @Req() req: Request & { user: RequestUser },
-    @Param('roomId', ParseIntPipe) roomId: number,
-  ) {
-    const { user } = req;
-    return this.svc.leaveRoom(roomId, user.id);
-  }
-
   // Send / Fetch messages
   @Post('rooms/:roomId/message')
-  @ZodValidation(discussionSendMessageSchema)
+  // @ZodValidation(discussionSendMessageSchema)
   async sendMessage(
     @Req() req: Request & { user: RequestUser },
     @Param('roomId', ParseIntPipe) roomId: number,
