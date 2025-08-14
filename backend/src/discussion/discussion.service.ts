@@ -9,6 +9,7 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Inject } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
+  users,
   discussionRooms,
   discussionParticipants,
   discussionMessages,
@@ -261,39 +262,6 @@ export class DiscussionService {
         ? (lastMap.get(r.lastMessageId) ?? null)
         : null,
     }));
-  }
-
-  async joinRoom(roomId: number, userId: number) {
-    const [room] = await this.db
-      .select()
-      .from(discussionRooms)
-      .where(eq(discussionRooms.id, roomId));
-    if (!room) throw new NotFoundException('Room not found.');
-    if (!room.isPublic) throw new ForbiddenException('Room is not public.');
-
-    await this.db
-      .insert(discussionParticipants)
-      .values({ roomId, userId, role: 'member' })
-      .onConflictDoNothing();
-    return { ok: true };
-  }
-
-  async leaveRoom(roomId: number, userId: number) {
-    const [room] = await this.db
-      .select()
-      .from(discussionRooms)
-      .where(eq(discussionRooms.id, roomId));
-    if (!room) throw new NotFoundException('Room not found.');
-
-    await this.db
-      .delete(discussionParticipants)
-      .where(
-        and(
-          eq(discussionParticipants.roomId, roomId),
-          eq(discussionParticipants.userId, userId),
-        ),
-      );
-    return { ok: true };
   }
 
   private async ensureCanPost(roomId: number, userId: number) {
