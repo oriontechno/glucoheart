@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { and, eq } from 'drizzle-orm';
-import * as argon2 from 'argon2';
+import * as bcrypt from 'bcrypt';
 
 // 🚩 Sesuaikan path ini dengan project kamu:
 import * as schema from '../src/db/schema';
@@ -129,7 +129,7 @@ async function upsertUser(
 
 async function seedUsers(db: DB) {
   console.log('Seeding users...');
-  const hashed = await argon2.hash('glucoheart321', { type: argon2.argon2id });
+  const hashed = await bcrypt.hash('glucoheart321', 10);
 
   const ids: Record<string, number> = {};
   for (const u of SEED_USERS) {
