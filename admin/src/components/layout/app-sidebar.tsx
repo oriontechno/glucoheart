@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/sidebar';
 import { navItems } from '@/constants/data';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { authService } from '@/lib/api/auth.service';
 import {
   IconBell,
   IconChevronRight,
@@ -42,6 +43,7 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
+import { toast } from 'sonner';
 import { Icons } from '../icons';
 import { OrgSwitcher } from '../org-switcher';
 import { UserAvatarProfile } from '../user-avatar-profile';
@@ -63,8 +65,27 @@ export default function AppSidebar() {
   const { isOpen } = useMediaQuery();
   // const { user } = useUser();
   const router = useRouter();
+  const [isSigningOut, setIsSigningOut] = React.useState(false);
+
   const handleSwitchTenant = (_tenantId: string) => {
     // Tenant switching functionality would be implemented here
+  };
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+
+    setIsSigningOut(true);
+    try {
+      await authService.signOut();
+      toast.success('Signed out successfully');
+      router.push('/auth/sign-in');
+      router.refresh();
+    } catch (error) {
+      console.error('Sign out error:', error);
+      toast.error('Failed to sign out');
+    } finally {
+      setIsSigningOut(false);
+    }
   };
 
   const activeTenant = tenants[0];
@@ -201,9 +222,13 @@ export default function AppSidebar() {
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleSignOut}
+                  disabled={isSigningOut}
+                  className='cursor-pointer'
+                >
                   <IconLogout className='mr-2 h-4 w-4' />
-                  {/* <SignOutButton redirectUrl='/auth/sign-in' /> */}
+                  {isSigningOut ? 'Signing out...' : 'Sign out'}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
