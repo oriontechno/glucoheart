@@ -16,14 +16,15 @@ import {
   FormMessage
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { authService } from '@/lib/api/auth.service';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useSearchParams } from 'next/navigation';
-import { useTransition } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useTransition } from 'react';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
 import * as z from 'zod';
-import GithubSignInButton from './github-auth-button';
-import { ChevronRightIcon } from 'lucide-react';
+import { ChevronRightIcon, AlertCircle } from 'lucide-react';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Enter a valid email address' }),
@@ -33,23 +34,56 @@ const formSchema = z.object({
 type UserFormValue = z.infer<typeof formSchema>;
 
 export default function UserAuthForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl');
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
   const [loading, startTransition] = useTransition();
+  const [error, setError] = useState<string>('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
   const defaultValues = {
     email: '',
     password: ''
   };
+
   const form = useForm<UserFormValue>({
     resolver: zodResolver(formSchema),
     defaultValues
   });
 
   const onSubmit = async (data: UserFormValue) => {
-    startTransition(() => {
-      console.log('Login data:', data);
-      // TODO: Implement actual login logic here
-      toast.success('Signed In Successfully!');
+    setError('');
+    setFieldErrors({});
+
+    startTransition(async () => {
+      try {
+        const result = await authService.signIn(data.email, data.password);
+
+        toast.success(`Welcome back, ${result.user.firstName}!`);
+
+        // Redirect to dashboard or callback URL
+        router.push(callbackUrl);
+        router.refresh();
+      } catch (err: any) {
+        console.error('Login error:', err);
+
+        // Handle validation errors for specific fields
+        if (err.errors && Array.isArray(err.errors)) {
+          const newFieldErrors: Record<string, string> = {};
+          err.errors.forEach((error: any) => {
+            if (error.field) {
+              newFieldErrors[error.field] = error.message;
+            }
+          });
+          setFieldErrors(newFieldErrors);
+        }
+
+        // Set general error message
+        setError(err.message || 'Login failed. Please try again.');
+
+        // Show toast for immediate feedback
+        toast.error(err.message || 'Login failed. Please try again.');
+      }
     });
   };
 
@@ -64,6 +98,13 @@ export default function UserAuthForm() {
         </CardDescription>
       </CardHeader>
       <CardContent className='space-y-6'>
+        {error && (
+          <Alert variant='destructive'>
+            <AlertCircle className='h-4 w-4' />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
@@ -83,7 +124,9 @@ export default function UserAuthForm() {
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage>
+                    {fieldErrors.email || form.formState.errors.email?.message}
+                  </FormMessage>
                 </FormItem>
               )}
             />
@@ -102,7 +145,10 @@ export default function UserAuthForm() {
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage>
+                    {fieldErrors.password ||
+                      form.formState.errors.password?.message}
+                  </FormMessage>
                 </FormItem>
               )}
             />
@@ -113,7 +159,7 @@ export default function UserAuthForm() {
               className='mt-2 ml-auto w-full'
               type='submit'
             >
-              Sign In <ChevronRightIcon />
+              {loading ? 'Signing In...' : 'Sign In'} <ChevronRightIcon />
             </Button>
           </form>
         </Form>
