@@ -33,6 +33,7 @@ import { useMediaQuery } from '@/hooks/use-media-query';
 import {
   IconBell,
   IconChevronRight,
+  IconChevronsDown,
   IconCreditCard,
   IconLogout,
   IconPhotoUp,
@@ -43,6 +44,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { Icons } from '../icons';
 import { OrgSwitcher } from '../org-switcher';
+import { UserAvatarProfile } from '../user-avatar-profile';
 
 export const company = {
   name: 'Acme Inc',
@@ -145,19 +147,21 @@ export default function AppSidebar() {
           <SidebarMenuItem>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                {/* <SidebarMenuButton
+                <SidebarMenuButton
                   size='lg'
                   className='data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground'
                 >
-                  {user && (
-                    <UserAvatarProfile
-                      className='h-8 w-8 rounded-lg'
-                      showInfo
-                      user={user}
-                    />
-                  )}
+                  <UserAvatarProfile
+                    className='h-8 w-8 rounded-lg'
+                    showInfo
+                    user={{
+                      emailAddresses: [{ emailAddress: 'admin@gmail.com' }],
+                      fullName: 'Admin User'
+                      // imageUrl: 'https://example.com/avatar.jpg'
+                    }}
+                  />
                   <IconChevronsDown className='ml-auto size-4' />
-                </SidebarMenuButton> */}
+                </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent
                 className='w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg'
@@ -166,15 +170,17 @@ export default function AppSidebar() {
                 sideOffset={4}
               >
                 <DropdownMenuLabel className='p-0 font-normal'>
-                  {/* <div className='px-1 py-1.5'>
-                    {user && (
-                      <UserAvatarProfile
-                        className='h-8 w-8 rounded-lg'
-                        showInfo
-                        user={user}
-                      />
-                    )}
-                  </div> */}
+                  <div className='px-1 py-1.5'>
+                    <UserAvatarProfile
+                      className='h-8 w-8 rounded-lg'
+                      showInfo
+                      user={{
+                        emailAddresses: [{ emailAddress: 'admin@gmail.com' }],
+                        fullName: 'Admin User'
+                        // imageUrl: 'https://example.com/avatar.jpg'
+                      }}
+                    />
+                  </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
 

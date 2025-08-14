@@ -4,13 +4,14 @@ import { GitHubLogoIcon } from '@radix-ui/react-icons';
 import { IconStar } from '@tabler/icons-react';
 import { Metadata } from 'next';
 import Link from 'next/link';
+import UserAuthForm from './user-auth-form';
 
 export const metadata: Metadata = {
   title: 'Authentication',
   description: 'Authentication forms built using the components.'
 };
 
-export default function SignInViewPage({ stars }: { stars: number }) {
+export default function SignInViewPage() {
   return (
     <div className='relative h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0'>
       <Link
@@ -67,14 +68,10 @@ export default function SignInViewPage({ stars }: { stars: number }) {
                 className='size-4 text-gray-500 transition-all duration-300 group-hover:text-yellow-300'
                 fill='currentColor'
               />
-              <span className='font-display font-medium'>{stars}</span>
+              {/* <span className='font-display font-medium'>{stars}</span> */}
             </div>
           </Link>
-          {/* <ClerkSignInForm
-            initialValues={{
-              emailAddress: 'your_mail+clerk_test@example.com'
-            }}
-          /> */}
+          <UserAuthForm />
 
           <p className='text-muted-foreground px-8 text-center text-sm'>
             By clicking continue, you agree to our{' '}
