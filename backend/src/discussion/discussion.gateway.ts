@@ -13,10 +13,7 @@ import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { and, eq } from 'drizzle-orm';
-import {
-  discussionParticipants,
-  discussionRooms,
-} from '../db/schema';
+import { discussionParticipants, discussionRooms } from '../db/schema';
 
 interface AuthedSocket extends Socket {
   data: { user?: { id: number; role?: string } };
@@ -29,12 +26,13 @@ interface AuthedSocket extends Socket {
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['websocket'], // match dengan client
+  transports: ['websocket'],
 })
 export class DiscussionGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(DiscussionGateway.name);
+  private readonly LOBBY = 'lobby';
 
   @WebSocketServer() io!: Server;
 
@@ -67,7 +65,7 @@ export class DiscussionGateway
 
   async handleDisconnect(_socket: AuthedSocket) {}
 
-  // ✅ SELARASKAN DENGAN CLIENT: 'discussion.join'
+  // === JOIN/LEAVE ROOM (untuk layar room chat) ===
   @SubscribeMessage('discussion.join')
   async onJoin(
     @ConnectedSocket() socket: AuthedSocket,
@@ -108,7 +106,6 @@ export class DiscussionGateway
     return { ok: true };
   }
 
-  // ✅ Tambahkan ('discussion.leave') agar simetris
   @SubscribeMessage('discussion.leave')
   async onLeave(
     @ConnectedSocket() socket: AuthedSocket,
@@ -119,18 +116,29 @@ export class DiscussionGateway
     socket.leave(this.room(roomId));
   }
 
+  // === LOBBY (untuk layar list room) ===
+  @SubscribeMessage('discussion.lobby.join')
+  async onLobbyJoin(@ConnectedSocket() socket: AuthedSocket) {
+    // cukup join satu “ruangan” global
+    socket.join(this.LOBBY);
+    return { ok: true };
+  }
+
+  @SubscribeMessage('discussion.lobby.leave')
+  async onLobbyLeave(@ConnectedSocket() socket: AuthedSocket) {
+    socket.leave(this.LOBBY);
+    return { ok: true };
+  }
+
   private room(id: number) {
     return `room:${id}`;
   }
 
   /**
-   * ✅ DENGARKAN event internal dari service.
-   * Service kamu mengirim payload = objek pesan lengkap:
-   * {
-   *   id, roomId, senderId, content, createdAt,
-   *   senderName, senderAvatar
-   * }
-   * Jadi broadcast langsung TANPA fetch DB lagi.
+   * Service mem-publish payload pesan LENGKAP via event emitter.
+   * Kita broadcast ke:
+   * - room:<roomId>   => untuk layar room chat
+   * - LOBBY           => untuk layar list room (agar bisa update preview & bump urutan)
    */
   @OnEvent('discussion.message.created', { async: true })
   handleMessageCreated(payload: {
@@ -142,8 +150,14 @@ export class DiscussionGateway
     senderName?: string;
     senderAvatar?: string;
   }) {
+    // broadcast ke room yang relevan
     this.io.to(this.room(payload.roomId))
-      // ✅ SELARASKAN NAMA EVENT DENGAN CLIENT
       .emit('discussion.message.created', payload);
+
+    // broadcast ringkas ke lobby untuk update list
+    this.io.to(this.LOBBY).emit('discussion.room.updated', {
+      roomId: payload.roomId,
+      lastMessage: payload, // biar front-end bisa langsung tampilkan preview & waktu
+    });
   }
 }
