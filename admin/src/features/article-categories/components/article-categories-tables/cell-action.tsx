@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { ArticleCategory } from '@/constants/mock-api';
+import { articleCategoriesService } from '@/lib/api/article-categories.service';
 import { IconEdit, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -22,7 +23,12 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  const onConfirm = async () => {};
+  const onConfirm = async () => {
+    try {
+      // await articleCategoriesService.delete(data.id);
+      router.refresh();
+    } catch (error) {}
+  };
 
   return (
     <>
