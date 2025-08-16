@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { users } from '../db/schema';
-import * as argon2 from 'argon2';
 import { and, asc, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -224,12 +223,10 @@ export class UsersService {
       throw new BadRequestException('Password lemah: ' + issues.join(', '));
 
     const currentHash = await this.getUserPasswordHash(actingUser.id);
-    const ok = await argon2.verify(currentHash, dto.currentPassword);
-    if (!ok) throw new ForbiddenException('Password saat ini salah');
+    const ok = await bcrypt.compare(currentHash, dto.currentPassword);
 
-    const newHash = await argon2.hash(dto.newPassword, {
-      type: argon2.argon2id,
-    });
+    if (!ok) throw new ForbiddenException('Password saat ini salah');
+    const newHash = await bcrypt.hash(dto.newPassword, 10);
     try {
       await this.db
         .update(users as any)
@@ -263,9 +260,7 @@ export class UsersService {
       .where(eq(users.id, dto.userId));
     if (!u) throw new NotFoundException('User tidak ditemukan');
 
-    const newHash = await argon2.hash(dto.newPassword, {
-      type: argon2.argon2id,
-    });
+    const newHash = await bcrypt.hash(dto.newPassword, 10);
 
     try {
       await this.db
