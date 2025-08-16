@@ -16,21 +16,20 @@ import { and, eq } from 'drizzle-orm';
 import {
   discussionParticipants,
   discussionRooms,
-  discussionMessages,
 } from '../db/schema';
-import { DiscussionService } from './discussion.service';
 
 interface AuthedSocket extends Socket {
   data: { user?: { id: number; role?: string } };
 }
 
-@WebSocketGateway({ 
-  namespace: '/discussion', 
+@WebSocketGateway({
+  namespace: '/discussion',
   cors: {
     origin: '*',
     methods: ['GET', 'POST'],
     credentials: true,
-  }
+  },
+  transports: ['websocket'], // match dengan client
 })
 export class DiscussionGateway
   implements OnGatewayConnection, OnGatewayDisconnect
@@ -42,7 +41,6 @@ export class DiscussionGateway
   constructor(
     @Inject('DATABASE_CONNECTION')
     private readonly db: NodePgDatabase<typeof import('../db/schema')>,
-    private readonly svc: DiscussionService,
     private readonly jwt: JwtService,
   ) {}
 
@@ -62,14 +60,15 @@ export class DiscussionGateway
       const userId = Number(payload?.userId ?? payload?.id ?? payload?.sub);
       if (!userId || Number.isNaN(userId)) return socket.disconnect(true);
       socket.data.user = { id: userId, role: payload?.role };
-    } catch (e) {
+    } catch {
       socket.disconnect(true);
     }
   }
 
   async handleDisconnect(_socket: AuthedSocket) {}
 
-  @SubscribeMessage('room.join')
+  // ✅ SELARASKAN DENGAN CLIENT: 'discussion.join'
+  @SubscribeMessage('discussion.join')
   async onJoin(
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() payload: { roomId: number },
@@ -90,7 +89,7 @@ export class DiscussionGateway
         .insert(discussionParticipants)
         .values({ roomId, userId, role: 'member' })
         .onConflictDoNothing();
-      socket.join(`room:${roomId}`);
+      socket.join(this.room(roomId));
       return { ok: true };
     }
 
@@ -105,32 +104,46 @@ export class DiscussionGateway
       );
     if (!p) return { ok: false, error: 'not a participant' };
 
-    socket.join(`room:${roomId}`);
+    socket.join(this.room(roomId));
     return { ok: true };
   }
 
-  @SubscribeMessage('message.send')
-  async onSend(
+  // ✅ Tambahkan ('discussion.leave') agar simetris
+  @SubscribeMessage('discussion.leave')
+  async onLeave(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() payload: { roomId: number; content: string },
+    @MessageBody() payload: { roomId: number },
   ) {
-    const userId = socket.data.user?.id;
-    if (!userId) return { ok: false, error: 'unauthorized' };
-    if (!payload?.roomId || !payload?.content)
-      return { ok: false, error: 'invalid payload' };
-
-    const msg = await this.svc.sendMessage(payload.roomId, userId, {
-      content: payload.content,
-    });
-    return { ok: true, message: msg };
+    const roomId = Number(payload?.roomId);
+    if (!roomId) return;
+    socket.leave(this.room(roomId));
   }
 
-  @OnEvent('discussion.message.created')
-  async handleMessageCreated(payload: { roomId: number; messageId: number }) {
-    const [m] = await this.db
-      .select()
-      .from(discussionMessages)
-      .where(eq(discussionMessages.id, payload.messageId));
-    if (m) this.io.to(`room:${payload.roomId}`).emit('message.new', m);
+  private room(id: number) {
+    return `room:${id}`;
+  }
+
+  /**
+   * ✅ DENGARKAN event internal dari service.
+   * Service kamu mengirim payload = objek pesan lengkap:
+   * {
+   *   id, roomId, senderId, content, createdAt,
+   *   senderName, senderAvatar
+   * }
+   * Jadi broadcast langsung TANPA fetch DB lagi.
+   */
+  @OnEvent('discussion.message.created', { async: true })
+  handleMessageCreated(payload: {
+    id: number;
+    roomId: number;
+    senderId: number;
+    content: string;
+    createdAt: Date;
+    senderName?: string;
+    senderAvatar?: string;
+  }) {
+    this.io.to(this.room(payload.roomId))
+      // ✅ SELARASKAN NAMA EVENT DENGAN CLIENT
+      .emit('discussion.message.created', payload);
   }
 }
