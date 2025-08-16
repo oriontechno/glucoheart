@@ -20,10 +20,10 @@ export class CreateUserDto {
   firstName: string;
 
   @IsString()
-  @IsNotEmpty()
-  lastName: string;
+  @IsOptional()
+  lastName?: string;
 
-  @IsEnum(['user', 'nurse', 'admin', 'superadmin'])
+  @IsEnum(['USER', 'NURSE', 'ADMIN', 'SUPPORT'])
   @IsNotEmpty()
   role: string;
 

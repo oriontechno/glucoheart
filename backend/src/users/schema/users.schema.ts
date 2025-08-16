@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const userRoles = ['user', 'nurse', 'admin', 'superadmin'] as const;
+const userRoles = ['USER', 'NURSE', 'ADMIN', 'SUPPORT'] as const;
 
 export const createUserSchema = z
   .object({
@@ -10,16 +10,15 @@ export const createUserSchema = z
       .min(8, 'Password must be at least 8 characters')
       .optional(),
     firstName: z.string().min(1, 'First name is required'),
-    lastName: z.string().min(1, 'Last name is required'),
+    lastName: z.string().min(1, 'Last name is required').optional(),
     role: z.enum(userRoles, {
-      message: 'Role must be one of: user, nurse, admin, superadmin',
+      message: 'Role must be one of: user, nurse, admin, support',
     }),
     profilePicture: z.string().optional(),
   })
   .required({
     email: true,
     firstName: true,
-    lastName: true,
     role: true,
   });
 

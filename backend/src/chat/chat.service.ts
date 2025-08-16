@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ForbiddenException,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import {
@@ -84,88 +85,106 @@ export class ChatService {
     }
     const pair = this.normalizePair(currentUserId, dto.targetUserId);
 
-    // Try find first
-    const existing = await this.db
-      .select()
-      .from(chatSessions)
-      .where(
-        and(
-          eq(chatSessions.type, 'one_to_one'),
-          eq(chatSessions.userAId, pair.a),
-          eq(chatSessions.userBId, pair.b),
-        ),
-      );
+    try {
+      // Try find first
+      const existing = await this.db
+        .select()
+        .from(chatSessions)
+        .where(
+          and(
+            eq(chatSessions.type, 'one_to_one'),
+            eq(chatSessions.userAId, pair.a),
+            eq(chatSessions.userBId, pair.b),
+          ),
+        );
 
-    if (existing.length > 0) {
-      const session = existing[0];
-      // Ensure both participants exist (idempotent)
-      await this.db
-        .insert(chatSessionParticipants)
-        .values([
+      if (existing.length > 0) {
+        const session = existing[0];
+        // Ensure both participants exist (idempotent)
+        await this.db
+          .insert(chatSessionParticipants)
+          .values([
+            { sessionId: session.id, userId: currentUserId, role: 'member' },
+            { sessionId: session.id, userId: dto.targetUserId, role: 'member' },
+          ])
+          .onConflictDoNothing();
+        return session;
+      }
+
+      // Create within transaction to avoid race conditions
+      return await this.db.transaction(async (tx) => {
+        const [session] = await tx
+          .insert(chatSessions)
+          .values({ type: 'one_to_one', userAId: pair.a, userBId: pair.b })
+          .returning();
+
+        await tx.insert(chatSessionParticipants).values([
           { sessionId: session.id, userId: currentUserId, role: 'member' },
           { sessionId: session.id, userId: dto.targetUserId, role: 'member' },
-        ])
-        .onConflictDoNothing();
-      return session;
+        ]);
+
+        return session;
+      });
+    } catch (error) {
+      console.error('Failed to create or retrieve one-to-one session:', error);
+      throw new InternalServerErrorException(
+        'Failed to create or retrieve one-to-one session',
+      );
     }
-
-    // Create within transaction to avoid race conditions
-    return await this.db.transaction(async (tx) => {
-      const [session] = await tx
-        .insert(chatSessions)
-        .values({ type: 'one_to_one', userAId: pair.a, userBId: pair.b })
-        .returning();
-
-      await tx.insert(chatSessionParticipants).values([
-        { sessionId: session.id, userId: currentUserId, role: 'member' },
-        { sessionId: session.id, userId: dto.targetUserId, role: 'member' },
-      ]);
-
-      return session;
-    });
   }
 
   // Send a message within a session
   async sendMessage(sessionId: number, senderId: number, dto: SendMessageDto) {
     // Verify membership (member or nurse)
-    await this.ensureUserIsParticipant(sessionId, senderId);
 
-    const inserted = await this.db.transaction(async (tx) => {
-      const [msg] = await tx
-        .insert(messages)
-        .values({ sessionId, senderId, content: dto.content })
-        .returning();
+    try {
+      await this.ensureUserIsParticipant(sessionId, senderId);
 
-      await tx
-        .update(chatSessions)
-        .set({
-          lastMessageId: msg.id,
-          lastMessageAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(chatSessions.id, sessionId));
+      const inserted = await this.db.transaction(async (tx) => {
+        const [msg] = await tx
+          .insert(messages)
+          .values({ sessionId, senderId, content: dto.content })
+          .returning();
 
-      return msg;
-    });
+        await tx
+          .update(chatSessions)
+          .set({
+            lastMessageId: msg.id,
+            lastMessageAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(chatSessions.id, sessionId));
 
-    this.events.emit('chat.message.created', {
-      sessionId,
-      messageId: inserted.id,
-    });
-    return inserted;
+        return msg;
+      });
+
+      this.events.emit('chat.message.created', {
+        sessionId,
+        messageId: inserted.id,
+      });
+      return inserted;
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      throw new InternalServerErrorException('Failed to send message');
+    }
   }
 
   // Fetch messages in ascending chronological order
   async fetchMessages(sessionId: number, userId: number) {
-    await this.ensureUserIsParticipant(sessionId, userId);
+    try {
+      await this.ensureUserIsParticipant(sessionId, userId);
 
-    const rows = await this.db
-      .select()
-      .from(messages)
-      .where(eq(messages.sessionId, sessionId))
-      .orderBy(asc(messages.createdAt));
+      const rows = await this.db
+        .select()
+        .from(messages)
+        .where(eq(messages.sessionId, sessionId))
+        .orderBy(asc(messages.createdAt));
 
-    return rows;
+      return rows;
+    } catch (error) {
+      console.error('Failed to fetch messages:', error);
+      throw new InternalServerErrorException('Failed to fetch messages');
+    }
   }
 
   // List sessions a user participates in, including last message info & assigned nurse
@@ -239,33 +258,38 @@ export class ChatService {
         'Nurse assignment only allowed for one-to-one sessions.',
       );
 
-    const updated = await this.db.transaction(async (tx) => {
-      await tx
-        .delete(chatSessionParticipants)
-        .where(
-          and(
-            eq(chatSessionParticipants.sessionId, sessionId),
-            eq(chatSessionParticipants.role, 'nurse'),
-          ),
-        );
+    try {
+      const updated = await this.db.transaction(async (tx) => {
+        await tx
+          .delete(chatSessionParticipants)
+          .where(
+            and(
+              eq(chatSessionParticipants.sessionId, sessionId),
+              eq(chatSessionParticipants.role, 'nurse'),
+            ),
+          );
 
-      await tx
-        .insert(chatSessionParticipants)
-        .values({ sessionId, userId: dto.nurseId, role: 'nurse' });
+        await tx
+          .insert(chatSessionParticipants)
+          .values({ sessionId, userId: dto.nurseId, role: 'nurse' });
 
-      const [s] = await tx
-        .update(chatSessions)
-        .set({ assignedNurseId: dto.nurseId, updatedAt: new Date() })
-        .where(eq(chatSessions.id, sessionId))
-        .returning();
+        const [s] = await tx
+          .update(chatSessions)
+          .set({ assignedNurseId: dto.nurseId, updatedAt: new Date() })
+          .where(eq(chatSessions.id, sessionId))
+          .returning();
 
-      return s;
-    });
+        return s;
+      });
 
-    this.events.emit('chat.nurse.assigned', {
-      sessionId,
-      nurseId: dto.nurseId,
-    });
-    return updated;
+      this.events.emit('chat.nurse.assigned', {
+        sessionId,
+        nurseId: dto.nurseId,
+      });
+      return updated;
+    } catch (error) {
+      console.error('Failed to assign nurse:', error);
+      throw new InternalServerErrorException('Failed to assign nurse');
+    }
   }
 }
