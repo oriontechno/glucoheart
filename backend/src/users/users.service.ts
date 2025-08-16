@@ -260,36 +260,55 @@ export class UsersService {
 
   async adminResetPassword(
     actingUser: { id: number; role?: string },
-    dto: AdminResetPasswordDto,
+    dto: { userId: number | string; newPassword: string },
   ) {
-    if (actingUser.role !== 'ADMIN')
+    // hanya ADMIN
+    if (actingUser.role !== 'ADMIN') {
       throw new ForbiddenException('Hanya admin yang boleh reset password');
+    }
 
+    // validasi userId number
+    const userId = Number(dto.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException('userId tidak valid');
+    }
+
+    // cek kekuatan password
     const issues = validatePasswordStrength(dto.newPassword);
-    if (issues.length)
+    if (issues.length) {
       throw new BadRequestException('Password lemah: ' + issues.join(', '));
+    }
 
-    // ensure user exists
+    // pastikan user ada
     const [u] = await this.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.id, dto.userId));
+      .where(eq(users.id, userId))
+      .limit(1);
     if (!u) throw new NotFoundException('User tidak ditemukan');
 
+    // hash baru
     const newHash = await bcrypt.hash(dto.newPassword, 10);
 
     try {
       await this.db
-        .update(users as any)
-        .set({ passwordHash: newHash, passwordUpdatedAt: new Date() } as any)
-        .where(eq(users.id as any, dto.userId));
+        .update(users)
+        .set({
+          password: newHash, // ✅ kolom sesuai schema
+          updatedAt: new Date(), // ✅ kolom sesuai schema
+        })
+        .where(eq(users.id, userId));
 
-      this.events.emit('user.password.reset', {
-        userId: dto.userId,
+      // Emit event kalau ada emitter yang diinject
+      this.events?.emit?.('user.password.reset', {
+        userId,
         byAdminId: actingUser.id,
       });
-      return { ok: true };
-    } catch (error) {
+
+      return { message: 'Password reset successfully' };
+    } catch (err: any) {
+      // kalau perlu debugging:
+      // console.error('adminResetPassword error:', err?.message, err);
       throw new InternalServerErrorException('Failed to reset password');
     }
   }
