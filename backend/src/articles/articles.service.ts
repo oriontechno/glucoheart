@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -23,6 +24,7 @@ import {
   articleCategoryLinks,
 } from '../db/schema';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 
@@ -155,26 +157,88 @@ export class ArticlesService {
     actingUser: { id: number; role?: string },
     dto: CreateCategoryDto,
   ) {
-    this.assertWriter(actingUser.role);
+    try {
+      this.assertWriter(actingUser.role);
 
-    const slug = await this.makeUniqueCategorySlug(dto.name);
+      const slug = await this.makeUniqueCategorySlug(dto.name);
 
-    const [row] = await this.db
-      .insert(articleCategories)
-      .values({ name: dto.name, slug })
-      .onConflictDoNothing() // jaga-jaga race condition
-      .returning();
+      const [row] = await this.db
+        .insert(articleCategories)
+        .values({ name: dto.name, slug })
+        .onConflictDoNothing() // jaga-jaga race condition
+        .returning();
 
-    if (row) return row;
+      if (row) return row;
 
-    // kalau onConflictDoNothing mem-pasifkan insert (slug keburu dipakai), ambil yang sudah ada
-    const [existing] = await this.db
-      .select()
-      .from(articleCategories)
-      .where(eq(articleCategories.slug, slug))
-      .limit(1);
+      // kalau onConflictDoNothing mem-pasifkan insert (slug keburu dipakai), ambil yang sudah ada
+      const [existing] = await this.db
+        .select()
+        .from(articleCategories)
+        .where(eq(articleCategories.slug, slug))
+        .limit(1);
 
-    return existing!;
+      return existing!;
+    } catch (error) {
+      throw new InternalServerErrorException(error);
+    }
+  }
+
+  async updateCategory(
+    actingUser: { id: number; role?: string },
+    categoryId: number,
+    dto: UpdateCategoryDto,
+  ) {
+    try {
+      this.assertWriter(actingUser.role);
+
+      const slug = await this.makeUniqueCategorySlug(dto.name);
+
+      const [row] = await this.db
+        .update(articleCategories)
+        .set({ name: dto.name, slug })
+        .where(eq(articleCategories.id, categoryId))
+        .returning();
+
+      if (row) return row;
+
+      // kalau tidak ada yang diupdate, ambil yang sudah ada
+      const [existing] = await this.db
+        .select()
+        .from(articleCategories)
+        .where(eq(articleCategories.id, categoryId))
+        .limit(1);
+
+      return existing!;
+    } catch (error) {
+      throw new InternalServerErrorException(error);
+    }
+  }
+
+  async deleteCategory(
+    actingUser: { id: number; role?: string },
+    categoryId: number,
+  ) {
+    try {
+      this.assertWriter(actingUser.role);
+
+      const [row] = await this.db
+        .delete(articleCategories)
+        .where(eq(articleCategories.id, categoryId))
+        .returning();
+
+      if (row) return row;
+
+      // kalau tidak ada yang dihapus, ambil yang sudah ada
+      const [existing] = await this.db
+        .select()
+        .from(articleCategories)
+        .where(eq(articleCategories.id, categoryId))
+        .limit(1);
+
+      return existing!;
+    } catch (error) {
+      throw new InternalServerErrorException(error);
+    }
   }
 
   // List categories (public)
@@ -526,6 +590,18 @@ export class ArticlesService {
       .returning();
 
     return row;
+  }
+
+  async delete(actingUser: { id: number; role?: string }, id: number) {
+    this.assertWriter(actingUser.role);
+
+    const [existing] = await this.db
+      .select()
+      .from(articles)
+      .where(eq(articles.id, id));
+    if (!existing) throw new NotFoundException('Article not found');
+
+    await this.db.delete(articles).where(eq(articles.id, id));
   }
 
   async publish(actingUser: { id: number; role?: string }, id: number) {

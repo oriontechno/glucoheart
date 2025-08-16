@@ -89,7 +89,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles('admin', 'superadmin')
+  @Roles('ADMIN', 'SUPPORT')
   remove(@Param('id') id: string, @Request() req) {
     return this.usersService.remove(+id, req.user.role);
   }
