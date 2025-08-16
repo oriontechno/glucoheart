@@ -18,4 +18,16 @@ export class CreateArticleDto {
   @IsString()
   @IsOptional()
   slug?: string; // optional; will be generated if missing
+
+  @IsOptional()
+  status?: 'draft' | 'published';
+
+  @IsOptional()
+  categories?: string | null; // "slug1.slug2"
+
+  @IsOptional()
+  coverAlt?: string | null;
+
+  @IsOptional()
+  coverUrl?: string | null; // Opsi B (tanpa file)
 }
