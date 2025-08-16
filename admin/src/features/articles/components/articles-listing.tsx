@@ -33,7 +33,6 @@ export default async function ArticlesListingPage({}: ArticlesListingPageProps) 
 
   const data = await fakeArticles.getArticles(filters);
   const data2 = await ArticlesServerService.getAdminArticles(filters);
-  console.log({ data2 });
   const totalArticles = data.total_articles;
   const articles: Article[] = data.articles;
 

@@ -1,7 +1,3 @@
-import { ColumnDef } from '@tanstack/react-table';
-import { Article } from '@/constants/mock-api';
-
-// Server-safe column definition factory
 export function createArticleColumnsConfig(
   categoryOptions: Array<{ value: string; label: string }> = []
 ) {
