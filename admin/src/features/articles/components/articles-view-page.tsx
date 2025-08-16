@@ -12,8 +12,6 @@ export default async function ArticlesViewPage({
   let article = null;
   let pageTitle = 'Create New Article';
 
-  console.log({ articleId });
-
   if (articleId !== 'new') {
     try {
       const data = await fakeArticles.getArticleById(Number(articleId));

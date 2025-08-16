@@ -9,7 +9,7 @@ import { User } from '@/types/entity';
 
 export const columns: ColumnDef<User>[] = [
   {
-    id: 'search',
+    id: 'firstName',
     accessorKey: 'firstName',
     header: ({ column }: { column: Column<User, unknown> }) => (
       <DataTableColumnHeader column={column} title='First Name' />
@@ -58,7 +58,7 @@ export const columns: ColumnDef<User>[] = [
     ),
     cell: ({ cell }) => {
       const status = cell.getValue<User['role']>();
-      const Icon = status === 'super_admin' ? CheckCircle2 : XCircle;
+      const Icon = status === 'ADMIN' ? CheckCircle2 : XCircle;
 
       return (
         <Badge variant='outline' className='capitalize'>
