@@ -48,9 +48,6 @@ export default function ArticleCategoriesForm({
         : new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
-
-    console.log('Article data:', articleData);
-    // Form submission logic would be implemented here
   }
 
   return (

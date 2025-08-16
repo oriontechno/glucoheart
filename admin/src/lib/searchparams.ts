@@ -20,6 +20,7 @@ export const searchParams = {
   // Common fields
   gender: parseAsString,
   category: parseAsString,
+  categories: parseAsString,
   sort: parseAsString
   // advanced filter
   // filters: getFiltersStateParser().withDefault([]),

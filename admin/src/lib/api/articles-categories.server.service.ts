@@ -31,7 +31,6 @@ export class ArticleCategoriesServerService {
   }) {
     try {
       const authConfig = await this.getAuthenticatedRequest();
-
       const response = await api.get('/articles/categories', {
         params: filters,
         ...authConfig
@@ -42,13 +41,12 @@ export class ArticleCategoriesServerService {
         data: response.data
       };
     } catch (error: any) {
-      console.error('Failed to fetch users:', error);
       return {
         success: false,
-        error: error.message || 'Failed to fetch users',
+        error: error.message || 'Failed to fetch article categories',
         data: {
-          users: [],
-          total_users: 0
+          categories: [],
+          total_categories: 0
         }
       };
     }

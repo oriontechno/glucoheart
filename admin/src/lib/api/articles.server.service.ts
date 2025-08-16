@@ -24,9 +24,9 @@ export class ArticlesServerService {
   static async getAdminArticles(filters: {
     page?: number;
     limit?: number;
-    roles?: string;
-    actives?: string;
+    scope?: string;
     search?: string;
+    categories?: string;
     sort?: string;
   }) {
     try {

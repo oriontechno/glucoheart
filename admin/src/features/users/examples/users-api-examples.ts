@@ -16,7 +16,6 @@ export async function exampleCreateUser() {
       role: 'user'
     });
 
-    console.log('User created:', newUser);
     return newUser;
   } catch (error) {
     console.error('Failed to create user:', error);
@@ -35,7 +34,6 @@ export async function exampleUpdateUser(userId: string) {
       // password is optional for updates
     });
 
-    console.log('User updated:', updatedUser);
     return updatedUser;
   } catch (error) {
     console.error('Failed to update user:', error);
@@ -47,7 +45,6 @@ export async function exampleUpdateUser(userId: string) {
 export async function exampleGetUser(userId: string) {
   try {
     const user = await usersService.getUserById(userId);
-    console.log('User retrieved:', user);
     return user;
   } catch (error) {
     console.error('Failed to get user:', error);
@@ -66,7 +63,6 @@ export async function exampleGetUsers() {
       sort: 'firstName'
     });
 
-    console.log('Users retrieved:', users);
     return users;
   } catch (error) {
     console.error('Failed to get users:', error);
@@ -78,7 +74,6 @@ export async function exampleGetUsers() {
 export async function exampleDeleteUser(userId: string) {
   try {
     const result = await usersService.deleteUser(userId);
-    console.log('User deleted:', result);
     return result;
   } catch (error) {
     console.error('Failed to delete user:', error);

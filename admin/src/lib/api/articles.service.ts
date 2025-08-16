@@ -16,7 +16,7 @@ export const articlesService = {
     search?: string;
     sort?: string;
   }) => {
-    const response = await api.get('/articles', {
+    const response = await api.get('/articles/search', {
       params: {
         page,
         limit,
