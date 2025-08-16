@@ -81,3 +81,46 @@ export const articleImages = pgTable(
 export const articleRelations = relations(articles, ({ many }) => ({
   images: many(articleImages),
 }));
+
+export const articleCategories = pgTable(
+  'article_categories',
+  {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    slug: text('slug').notNull(), // unik
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    uqSlug: uniqueIndex('uq_article_categories_slug').on(t.slug),
+    idxName: index('idx_article_categories_name').on(t.name),
+  }),
+);
+
+// --- M:N link (article <-> category) ---
+export const articleCategoryLinks = pgTable(
+  'article_category_links',
+  {
+    id: serial('id').primaryKey(),
+    articleId: integer('article_id')
+      .notNull()
+      .references(() => articles.id, {
+        onDelete: 'cascade',
+        onUpdate: 'cascade',
+      }),
+    categoryId: integer('category_id')
+      .notNull()
+      .references(() => articleCategories.id, {
+        onDelete: 'cascade',
+        onUpdate: 'cascade',
+      }),
+  },
+  (t) => ({
+    uqArticleCategory: uniqueIndex('uq_article_category').on(
+      t.articleId,
+      t.categoryId,
+    ),
+    idxArticle: index('idx_article_category_article').on(t.articleId),
+    idxCategory: index('idx_article_category_category').on(t.categoryId),
+  }),
+);
