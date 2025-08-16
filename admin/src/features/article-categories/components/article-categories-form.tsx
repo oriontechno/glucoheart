@@ -15,6 +15,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { ArticleCategory } from '@/constants/mock-api';
+import { articleCategoriesService } from '@/lib/api/article-categories.service';
+import { useReactTable } from '@tanstack/react-table';
+import { useRouter } from 'next/navigation';
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -29,6 +32,8 @@ export default function ArticleCategoriesForm({
   initialData: ArticleCategory | null;
   pageTitle: string;
 }) {
+  const router = useRouter();
+
   const defaultValues = {
     name: initialData?.name || ''
   };
@@ -38,16 +43,20 @@ export default function ArticleCategoriesForm({
     values: defaultValues
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     // Add timestamps for new ArticleCategories
     const articleData = {
-      ...values,
-      // These would typically be handled by the backend
-      created_at: initialData
-        ? initialData.created_at
-        : new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      ...values
     };
+
+    try {
+      const result = await articleCategoriesService.create(articleData);
+
+      // Redirect to article categories list page
+      router.push('/dashboard/article-categories');
+    } catch (error) {
+      // You can add error handling here (toast notification, etc)
+    }
   }
 
   return (

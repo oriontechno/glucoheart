@@ -3,7 +3,6 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { Text } from 'lucide-react';
 import { CellAction } from './cell-action';
-import { getArticleCategoriesSync } from '@/lib/api/article-categories.service';
 import {
   createArticleColumnsConfig,
   type ArticleColumnsConfig
@@ -114,9 +113,3 @@ export const createArticleColumns = (
   const config = createArticleColumnsConfig(categoryOptions);
   return createArticleColumnsFromConfig(config);
 };
-
-// Fallback columns with safe category loading for backward compatibility
-export const columns: ColumnDef<Article>[] = (() => {
-  const categoryOptions = getArticleCategoriesSync();
-  return createArticleColumns(categoryOptions);
-})();
