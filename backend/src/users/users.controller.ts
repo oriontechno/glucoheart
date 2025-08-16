@@ -95,7 +95,7 @@ export class UsersController {
   }
 
   @Post('change-password')
-  @ZodValidation(changePasswordSchema)
+  // @ZodValidation(changePasswordSchema)
   async changePassword(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: ChangePasswordDto,
