@@ -11,6 +11,7 @@ import {
   ParseIntPipe,
   UploadedFile,
   UseInterceptors,
+  Put,
 } from '@nestjs/common';
 import { ArticlesService } from './articles.service';
 import { Request } from 'express';
@@ -30,6 +31,7 @@ import {
 } from './schema/articles.schema';
 import { SetArticleCategoriesDto } from './dto/set-article-categories.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 function ensureUploadDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -153,6 +155,15 @@ export class ArticlesController {
     return this.svc.update({ id: user.id, role: user.role }, id, dto);
   }
 
+  @Delete(':id')
+  async delete(
+    @Req() req: Request & { user: RequestUser },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const { user } = req;
+    return this.svc.delete({ id: user.id, role: user.role }, id);
+  }
+
   @Post(':id/publish')
   async publish(
     @Req() req: Request & { user: RequestUser },
@@ -273,6 +284,30 @@ export class ArticlesController {
     return this.svc.createCategory(
       { id: req.user.id, role: req.user.role },
       dto,
+    );
+  }
+
+  @Put('categories/:id')
+  async updateCategory(
+    @Req() req: Request & { user: { id: number; role?: string } },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateCategoryDto,
+  ) {
+    return this.svc.updateCategory(
+      { id: req.user.id, role: req.user.role },
+      id,
+      dto,
+    );
+  }
+
+  @Delete('categories/:id')
+  async deleteCategory(
+    @Req() req: Request & { user: { id: number; role?: string } },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    return this.svc.deleteCategory(
+      { id: req.user.id, role: req.user.role },
+      id,
     );
   }
 }
