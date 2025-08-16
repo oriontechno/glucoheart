@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -15,6 +16,7 @@ import {
   discussionMessages,
 } from '../db/schema';
 import { CreateRoomDto } from './dto/create-room.dto';
+import { UpdateRoomDto } from './dto/update-room.dto';
 import { DiscussionSendMessageDto } from './dto/send-message.dto';
 
 @Injectable()
@@ -216,23 +218,69 @@ export class DiscussionService {
   ) {
     if (actingUser.role !== 'ADMIN')
       throw new ForbiddenException('Only admin can create discussion rooms.');
-    const [room] = await this.db
-      .insert(discussionRooms)
-      .values({
-        topic: dto.topic,
-        description: dto.description,
-        isPublic: dto.isPublic ?? true,
-        createdBy: actingUser.id,
-      })
-      .returning();
 
-    // Optionally add creator as participant
-    await this.db
-      .insert(discussionParticipants)
-      .values({ roomId: room.id, userId: actingUser.id, role: 'member' })
-      .onConflictDoNothing();
+    try {
+      const [room] = await this.db
+        .insert(discussionRooms)
+        .values({
+          topic: dto.topic,
+          description: dto.description,
+          isPublic: dto.isPublic ?? true,
+          createdBy: actingUser.id,
+        })
+        .returning();
 
-    return room;
+      // Optionally add creator as participant
+      await this.db
+        .insert(discussionParticipants)
+        .values({ roomId: room.id, userId: actingUser.id, role: 'member' })
+        .onConflictDoNothing();
+
+      return room;
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to create discussion room',
+      );
+    }
+  }
+
+  async updateRoom(
+    actingUser: { id: number; role?: string },
+    roomId: number,
+    dto: UpdateRoomDto,
+  ) {
+    if (actingUser.role !== 'ADMIN')
+      throw new ForbiddenException('Only admin can update discussion rooms.');
+
+    try {
+      await this.db
+        .update(discussionRooms)
+        .set({
+          topic: dto.topic,
+          description: dto.description,
+          isPublic: dto.isPublic,
+        })
+        .where(eq(discussionRooms.id, roomId));
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to update discussion room',
+      );
+    }
+  }
+
+  async deleteRoom(actingUser: { id: number; role?: string }, roomId: number) {
+    if (actingUser.role !== 'ADMIN')
+      throw new ForbiddenException('Only admin can delete discussion rooms.');
+
+    try {
+      await this.db
+        .delete(discussionRooms)
+        .where(eq(discussionRooms.id, roomId));
+    } catch (error) {
+      throw new InternalServerErrorException(
+        'Failed to delete discussion room',
+      );
+    }
   }
 
   async listRooms() {
@@ -298,39 +346,46 @@ export class DiscussionService {
     senderId: number,
     dto: DiscussionSendMessageDto,
   ) {
-    await this.ensureCanPost(roomId, senderId);
+    try {
+      await this.ensureCanPost(roomId, senderId);
+      const inserted = await this.db.transaction(async (tx) => {
+        const [msg] = await tx
+          .insert(discussionMessages)
+          .values({ roomId, senderId, content: dto.content })
+          .returning();
 
-    const inserted = await this.db.transaction(async (tx) => {
-      const [msg] = await tx
-        .insert(discussionMessages)
-        .values({ roomId, senderId, content: dto.content })
-        .returning();
+        await tx
+          .update(discussionRooms)
+          .set({
+            lastMessageId: msg.id,
+            lastMessageAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .where(eq(discussionRooms.id, roomId));
 
-      await tx
-        .update(discussionRooms)
-        .set({
-          lastMessageId: msg.id,
-          lastMessageAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(discussionRooms.id, roomId));
+        return msg;
+      });
 
-      return msg;
-    });
-
-    this.events.emit('discussion.message.created', {
-      roomId,
-      messageId: inserted.id,
-    });
-    return inserted;
+      this.events.emit('discussion.message.created', {
+        roomId,
+        messageId: inserted.id,
+      });
+      return inserted;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to send message');
+    }
   }
 
   async fetchMessages(roomId: number) {
-    const rows = await this.db
-      .select()
-      .from(discussionMessages)
-      .where(eq(discussionMessages.roomId, roomId))
-      .orderBy(asc(discussionMessages.createdAt));
-    return rows;
+    try {
+      const rows = await this.db
+        .select()
+        .from(discussionMessages)
+        .where(eq(discussionMessages.roomId, roomId))
+        .orderBy(asc(discussionMessages.createdAt));
+      return rows;
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to fetch messages');
+    }
   }
 }
