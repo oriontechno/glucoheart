@@ -37,7 +37,7 @@ export class ChatController {
 
   // POST /chat/session/by-role : create/get 1:1 session targeting a role (ADMIN/SUPPORT)
   @Post('session')
-  @ZodValidation(createSessionByRoleSchema)
+  // @ZodValidation(createSessionByRoleSchema)
   async createOrGetSessionByRole(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: CreateSessionByRoleDto,
@@ -50,7 +50,7 @@ export class ChatController {
 
   // POST /chat/session/:sessionId/message : send message
   @Post('session/:sessionId/message')
-  @ZodValidation(sendMessageSchema)
+  // @ZodValidation(sendMessageSchema)
   async sendMessage(
     @Req() req: Request & { user: RequestUser },
     @Param('sessionId', ParseIntPipe) sessionId: number,
@@ -79,7 +79,7 @@ export class ChatController {
 
   // POST /chat/session/:sessionId/assign-nurse : assign nurse (admin/support only)
   @Post('session/:sessionId/assign-nurse')
-  @ZodValidation(assignNurseSchema)
+  // @ZodValidation(assignNurseSchema)
   async assignNurse(
     @Req() req: Request & { user: RequestUser },
     @Param('sessionId', ParseIntPipe) sessionId: number,

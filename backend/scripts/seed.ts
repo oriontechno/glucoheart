@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { and, eq } from 'drizzle-orm';
-import * as argon2 from 'argon2';
+import * as bcrypt from 'bcrypt';
 
 // 🚩 Sesuaikan path ini dengan project kamu:
 import * as schema from '../src/db/schema';
@@ -13,6 +13,8 @@ import {
   // Articles
   articles,
   articleImages,
+  articleCategories, // ⬅️ tambah
+  articleCategoryLinks, // ⬅️ tambah
   // Discussion (public group)
   discussionRooms,
   discussionParticipants,
@@ -129,7 +131,7 @@ async function upsertUser(
 
 async function seedUsers(db: DB) {
   console.log('Seeding users...');
-  const hashed = await argon2.hash('glucoheart321', { type: argon2.argon2id });
+  const hashed = await bcrypt.hash('glucoheart321', 10);
 
   const ids: Record<string, number> = {};
   for (const u of SEED_USERS) {
@@ -149,20 +151,92 @@ async function seedUsers(db: DB) {
   };
 }
 
+// upsert 1 category by slug
+type CategoryRow = typeof articleCategories.$inferSelect;
+
+async function upsertCategory(
+  db: DB,
+  input: { name: string; slug: string },
+): Promise<CategoryRow> {
+  const slug = slugify(input.slug);
+  const [exist] = await db
+    .select()
+    .from(articleCategories)
+    .where(eq(articleCategories.slug, slug))
+    .limit(1);
+  if (exist) return exist;
+
+  const [row] = await db
+    .insert(articleCategories)
+    .values({ name: input.name, slug })
+    .onConflictDoNothing()
+    .returning();
+
+  if (row) return row;
+
+  const [after] = await db
+    .select()
+    .from(articleCategories)
+    .where(eq(articleCategories.slug, slug))
+    .limit(1);
+
+  return after!; // dipastikan ada
+}
+
+async function linkArticleCategories(
+  db: DB,
+  articleId: number,
+  slugs: string[],
+): Promise<CategoryRow[]> {
+  if (!slugs.length) return [];
+
+  // bikin/ambil semua kategori sesuai slug (bertipe CategoryRow[])
+  const cats = await Promise.all(
+    slugs.map((s) =>
+      upsertCategory(db, {
+        name: s.replace(/-/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+        slug: s,
+      }),
+    ),
+  );
+
+  // buat link (ignore jika sudah ada)
+  await db
+    .insert(articleCategoryLinks)
+    .values(cats.map((c) => ({ articleId, categoryId: c.id })))
+    .onConflictDoNothing();
+
+  return cats;
+}
+
 async function seedArticles(db: DB, who: { adminId: number }) {
   console.log('Seeding articles...');
 
-  // Draft article
+  // siapkan kategori yang akan dipakai
+  const catMental = await upsertCategory(db, {
+    name: 'Mental Health',
+    slug: 'mental-health',
+  });
+  const catNutrition = await upsertCategory(db, {
+    name: 'Nutrition',
+    slug: 'nutrition',
+  });
+  const catWellness = await upsertCategory(db, {
+    name: 'Wellness',
+    slug: 'wellness',
+  });
+
+  // --- Draft article ---
   const draftTitle = 'Manajemen Stres untuk Mahasiswa';
   const draftSlug = slugify(draftTitle);
-  const [draft] = await db
-    .insert(articles as any)
+  const [draftIns] = await db
+    .insert(articles)
     .values({
       title: draftTitle,
       slug: draftSlug,
       summary: 'Cara sederhana mengelola stres saat kuliah.',
       content: '<p>Ini adalah <em>draft</em> artikel...</p>',
-      status: 'draft', // enum article_status
+      status: 'draft',
       createdBy: who.adminId,
       updatedBy: who.adminId,
       updatedAt: new Date(),
@@ -170,18 +244,32 @@ async function seedArticles(db: DB, who: { adminId: number }) {
     .onConflictDoNothing()
     .returning();
 
-  // Published article
+  // jika sudah ada (onConflict), ambil recordnya
+  const draft =
+    draftIns ??
+    (
+      await db
+        .select()
+        .from(articles)
+        .where(eq(articles.slug, draftSlug))
+        .limit(1)
+    )[0];
+
+  // link kategori draft
+  await linkArticleCategories(db, draft.id, [catMental.slug]);
+
+  // --- Published article ---
   const pubTitle = 'Gizi Seimbang 101';
   const pubSlug = slugify(pubTitle);
   const now = new Date();
-  const [published] = await db
-    .insert(articles as any)
+  const [pubIns] = await db
+    .insert(articles)
     .values({
       title: pubTitle,
       slug: pubSlug,
       summary: 'Memahami porsi & variasi makanan.',
       content: '<p>Artikel publik tentang gizi seimbang.</p>',
-      status: 'published', // enum article_status
+      status: 'published',
       publishedAt: now,
       createdBy: who.adminId,
       updatedBy: who.adminId,
@@ -190,31 +278,47 @@ async function seedArticles(db: DB, who: { adminId: number }) {
     .onConflictDoNothing()
     .returning();
 
-  if (published) {
-    // Cover dummy (tanpa file fisik)
-    const [img] = await db
-      .insert(articleImages as any)
-      .values({
-        articleId: published.id,
-        url: '/uploads/articles/sample.jpg',
-        alt: 'Ilustrasi gizi seimbang',
-        isCover: true,
-        position: 0,
-      })
-      .returning();
+  const published =
+    pubIns ??
+    (
+      await db
+        .select()
+        .from(articles)
+        .where(eq(articles.slug, pubSlug))
+        .limit(1)
+    )[0];
 
+  // link kategori published
+  await linkArticleCategories(db, published.id, [
+    catNutrition.slug,
+    catWellness.slug,
+  ]);
+
+  // cover dummy (tanpa file fisik)
+  const [img] = await db
+    .insert(articleImages)
+    .values({
+      articleId: published.id,
+      url: '/uploads/articles/sample.jpg',
+      alt: 'Ilustrasi gizi seimbang',
+      isCover: true,
+      position: 0,
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  // set cover jika barusan dibuat
+  if (img) {
     await db
-      .update(articles as any)
+      .update(articles)
       .set({ coverImageId: img.id, updatedAt: new Date() })
-      .where(eq((articles as any).id, published.id));
+      .where(eq(articles.id, published.id));
   }
 
-  if (draft) {
-    console.log(`  ✓ draft: ${draftSlug}`);
-  }
-  if (published) {
-    console.log(`  ✓ published: ${pubSlug} + cover`);
-  }
+  console.log(`  ✓ draft: ${draftSlug} [categories: mental-health]`);
+  console.log(
+    `  ✓ published: ${pubSlug} [categories: nutrition, wellness] + cover`,
+  );
 
   return { draft, published };
 }

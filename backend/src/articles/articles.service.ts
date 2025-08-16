@@ -6,10 +6,27 @@ import {
 } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { and, eq, ilike, desc, inArray, sql } from 'drizzle-orm';
-import { articles, articleImages } from '../db/schema';
+import {
+  and,
+  eq,
+  ilike,
+  desc,
+  inArray,
+  sql,
+  asc,
+  notInArray,
+} from 'drizzle-orm';
+import {
+  articles,
+  articleImages,
+  articleCategories,
+  articleCategoryLinks,
+} from '../db/schema';
+import { CreateCategoryDto } from './dto/create-category.dto';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
+
+type ArticleStatus = 'draft' | 'published';
 
 @Injectable()
 export class ArticlesService {
@@ -31,6 +48,23 @@ export class ArticlesService {
       .replace(/(^-|-$)+/g, '');
   }
 
+  private async makeUniqueCategorySlug(baseName: string) {
+    const base = this.slugify(baseName);
+    // ambil semua slug yang diawali base (base, base-2, base-3, ...)
+    const rows = await this.db
+      .select({ slug: articleCategories.slug })
+      .from(articleCategories)
+      .where(sql`${articleCategories.slug} LIKE ${base + '%'}`);
+
+    const used = new Set(rows.map((r) => r.slug));
+    if (!used.has(base)) return base;
+
+    // cari suffix angka terkecil yang belum dipakai
+    let i = 2;
+    while (used.has(`${base}-${i}`)) i++;
+    return `${base}-${i}`;
+  }
+
   private async ensureUniqueSlug(base: string, articleId?: number) {
     let attempt = 0;
     while (attempt < 50) {
@@ -45,6 +79,388 @@ export class ArticlesService {
     }
     throw new BadRequestException('Unable to generate unique slug');
   }
+
+  // --- helpers ---
+  private parseStatuses(status?: string): ArticleStatus[] | null {
+    // contoh: "draft.published"
+    if (!status) return null;
+    const set = new Set<ArticleStatus>();
+    for (const s of status.split('.').map((x) => x.trim().toLowerCase())) {
+      if (s === 'draft' || s === 'published') set.add(s);
+    }
+    return set.size ? Array.from(set) : null;
+  }
+
+  private buildWhere(params: {
+    status?: string;
+    search?: string;
+    defaultToPublished?: boolean;
+  }) {
+    const conds: any[] = [];
+
+    // filter status
+    const parsed = this.parseStatuses(params.status);
+    if (parsed && parsed.length) {
+      conds.push(inArray(articles.status, parsed as any));
+    } else if (params.defaultToPublished) {
+      // untuk public all: default hanya published
+      conds.push(eq(articles.status, 'published' as any));
+    }
+
+    // search by title/summary
+    if (params.search) {
+      const q = `%${params.search}%`;
+      conds.push(
+        sql`(${articles.title} ILIKE ${q} OR ${articles.summary} ILIKE ${q})`,
+      );
+      // kalau mau include content:
+      // conds.push(sql`(${articles.title} ILIKE ${q} OR ${articles.summary} ILIKE ${q} OR ${articles.content} ILIKE ${q})`);
+    }
+
+    return conds.length ? and(...conds) : sql`true`;
+  }
+
+  private parseSort(sort?: string) {
+    // dukungan kolom sort:
+    const allowed: Record<string, any> = {
+      id: articles.id,
+      title: articles.title,
+      created_at: articles.createdAt,
+      updated_at: articles.updatedAt,
+      published_at: articles.publishedAt,
+      status: articles.status,
+    };
+    const def = desc(articles.publishedAt ?? articles.createdAt);
+
+    if (!sort) return [def];
+    try {
+      const arr = JSON.parse(sort);
+      if (!Array.isArray(arr) || !arr.length) return [def];
+      const orderBys: any[] = [];
+      for (const item of arr) {
+        const col = allowed[item?.id as string];
+        if (!col) continue;
+        orderBys.push(item?.desc ? desc(col) : asc(col));
+      }
+      return orderBys.length ? orderBys : [def];
+    } catch {
+      return [def];
+    }
+  }
+
+  // ==== CATEGORY API ====
+
+  // Create category (ADMIN/SUPPORT)
+  async createCategory(
+    actingUser: { id: number; role?: string },
+    dto: CreateCategoryDto,
+  ) {
+    this.assertWriter(actingUser.role);
+
+    const slug = await this.makeUniqueCategorySlug(dto.name);
+
+    const [row] = await this.db
+      .insert(articleCategories)
+      .values({ name: dto.name, slug })
+      .onConflictDoNothing() // jaga-jaga race condition
+      .returning();
+
+    if (row) return row;
+
+    // kalau onConflictDoNothing mem-pasifkan insert (slug keburu dipakai), ambil yang sudah ada
+    const [existing] = await this.db
+      .select()
+      .from(articleCategories)
+      .where(eq(articleCategories.slug, slug))
+      .limit(1);
+
+    return existing!;
+  }
+
+  // List categories (public)
+  async listCategories(q?: string, limit = 100, offset = 0) {
+    const where = q ? ilike(articleCategories.name, `%${q}%`) : sql`true`;
+    return this.db
+      .select()
+      .from(articleCategories)
+      .where(where)
+      .orderBy(asc(articleCategories.slug))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  // Helper: get categories for many article ids
+  private async getCategoriesMap(articleIds: number[]) {
+    if (!articleIds.length) return new Map<number, any[]>();
+    const rows = await this.db
+      .select({
+        articleId: articleCategoryLinks.articleId,
+        id: articleCategories.id,
+        name: articleCategories.name,
+        slug: articleCategories.slug,
+      })
+      .from(articleCategoryLinks)
+      .innerJoin(
+        articleCategories,
+        eq(articleCategoryLinks.categoryId, articleCategories.id),
+      )
+      .where(inArray(articleCategoryLinks.articleId, articleIds));
+
+    const map = new Map<number, any[]>();
+    for (const r of rows) {
+      const arr = map.get(r.articleId) ?? [];
+      arr.push({ id: r.id, name: r.name, slug: r.slug });
+      map.set(r.articleId, arr);
+    }
+    return map;
+  }
+
+  // Set categories for an article (replace all). ADMIN/SUPPORT only
+  async setArticleCategories(
+    actingUser: { id: number; role?: string },
+    articleId: number,
+    slugs: string[],
+  ) {
+    this.assertWriter(actingUser.role);
+
+    // pastikan artikel ada
+    const [art] = await this.db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.id, articleId));
+    if (!art) throw new NotFoundException('Article not found');
+
+    // normalisasi & ambil kategori
+    const norm = Array.from(new Set(slugs.map((s) => s.toLowerCase().trim())));
+
+    const cats = norm.length
+      ? await this.db
+          .select()
+          .from(articleCategories)
+          .where(inArray(articleCategories.slug, norm))
+      : [];
+
+    if (norm.length !== cats.length) {
+      const missing = norm.filter((s) => !cats.find((c) => c.slug === s));
+      throw new BadRequestException(`Unknown category: ${missing.join(', ')}`);
+    }
+
+    const catIds = cats.map((c) => c.id);
+
+    // 🔧 DELETE links lama
+    if (catIds.length === 0) {
+      // jika tidak ada kategori baru → hapus semua link kategori artikel ini
+      await this.db
+        .delete(articleCategoryLinks)
+        .where(eq(articleCategoryLinks.articleId, articleId));
+    } else {
+      // hapus link yang tidak termasuk set baru
+      await this.db.delete(articleCategoryLinks).where(
+        and(
+          eq(articleCategoryLinks.articleId, articleId),
+          notInArray(articleCategoryLinks.categoryId, catIds), // ✅ aman & clean
+        ),
+      );
+
+      // (Jika versi drizzle kamu belum punya notInArray, pakai raw SQL berikut:)
+      // await this.db.execute(sql`
+      //   DELETE FROM "article_category_links"
+      //   WHERE "article_id" = ${articleId}
+      //     AND "category_id" NOT IN (${sql.join(catIds, sql`, `)})
+      // `);
+    }
+
+    // 🔧 INSERT links baru (abaikan kalau sudah ada)
+    if (catIds.length) {
+      await this.db
+        .insert(articleCategoryLinks)
+        .values(catIds.map((cid) => ({ articleId, categoryId: cid })))
+        .onConflictDoNothing();
+    }
+
+    return {
+      ok: true,
+      articleId,
+      categories: cats.map((c) => ({ id: c.id, name: c.name, slug: c.slug })),
+    };
+  }
+  // ================================================================================= //
+
+  // ================================ Filter Function ====================================== //
+
+  // Tambah parameter categories: string (dot-separated slugs)
+  async findAllSimple(params: {
+    status?: string;
+    search?: string;
+    limit?: number;
+    categories?: string;
+  }) {
+    const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 200);
+
+    // WHERE dasar (status/search)
+    const whereBase = this.buildWhere({
+      status: params.status,
+      search: params.search,
+      defaultToPublished: true,
+    });
+
+    // Filter kategori via EXISTS (OR: salah satu slug cocok)
+    let where = whereBase;
+    if (params.categories) {
+      const slugs = Array.from(
+        new Set(
+          params.categories
+            .split('.')
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      );
+      if (slugs.length) {
+        const slugList = slugs; // string[]
+        where = and(
+          whereBase,
+          sql`
+    EXISTS (
+      SELECT 1
+      FROM "article_category_links" acl
+      JOIN "article_categories" ac ON ac.id = acl.category_id
+      WHERE acl.article_id = ${articles.id}
+        AND ac.slug IN (${sql.join(slugs, sql`, `)}) 
+    )
+  `,
+        );
+      }
+    }
+
+    const rows = await this.db
+      .select({
+        id: articles.id,
+        title: articles.title,
+        slug: articles.slug,
+        status: articles.status,
+        createdAt: articles.createdAt,
+        updatedAt: articles.updatedAt,
+        publishedAt: articles.publishedAt,
+        coverImageId: articles.coverImageId,
+        summary: articles.summary,
+      })
+      .from(articles)
+      .where(where)
+      .orderBy(desc(articles.publishedAt ?? articles.createdAt))
+      .limit(limit);
+
+    // attach categories
+    const map = await this.getCategoriesMap(rows.map((r) => r.id));
+    return rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      slug: r.slug,
+      status: r.status,
+      summary: r.summary ?? null,
+      coverImageId: r.coverImageId ?? null,
+      created_at: r.createdAt ?? null,
+      updated_at: r.updatedAt ?? null,
+      published_at: r.publishedAt ?? null,
+      categories: map.get(r.id) ?? [],
+    }));
+  }
+
+  async findPaginated(params: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+    sort?: string;
+    scope?: 'public' | 'admin';
+    categories?: string;
+  }) {
+    const page = Math.max(Number(params.page ?? 1), 1);
+    const limit = Math.min(Math.max(Number(params.limit ?? 10), 1), 100);
+    const offset = (page - 1) * limit;
+
+    const whereBase = this.buildWhere({
+      status: params.status,
+      search: params.search,
+      defaultToPublished: params.scope !== 'admin',
+    });
+
+    let where = whereBase;
+    if (params.categories) {
+      const slugs = Array.from(
+        new Set(
+          params.categories
+            .split('.')
+            .map((s) => s.trim().toLowerCase())
+            .filter(Boolean),
+        ),
+      );
+      if (slugs.length) {
+        const slugList = slugs; // string[]
+        where = and(
+          whereBase,
+          sql`
+    EXISTS (
+      SELECT 1
+      FROM "article_category_links" acl
+      JOIN "article_categories" ac ON ac.id = acl.category_id
+      WHERE acl.article_id = ${articles.id}
+        AND ac.slug IN (${sql.join(slugs, sql`, `)}) 
+    )
+  `,
+        );
+      }
+    }
+
+    const orderBys = this.parseSort(params.sort);
+
+    const totalRows = await this.db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(articles)
+      .where(where);
+
+    const rows = await this.db
+      .select({
+        id: articles.id,
+        title: articles.title,
+        slug: articles.slug,
+        status: articles.status,
+        createdAt: articles.createdAt,
+        updatedAt: articles.updatedAt,
+        publishedAt: articles.publishedAt,
+        coverImageId: articles.coverImageId,
+        summary: articles.summary,
+      })
+      .from(articles)
+      .where(where)
+      .orderBy(...orderBys)
+      .limit(limit)
+      .offset(offset);
+
+    const map = await this.getCategoriesMap(rows.map((r) => r.id));
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      message: 'Article search results',
+      total_articles: totalRows[0]?.c ?? 0,
+      offset,
+      limit,
+      articles: rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        slug: r.slug,
+        status: r.status,
+        summary: r.summary ?? null,
+        coverImageId: r.coverImageId ?? null,
+        created_at: r.createdAt ?? null,
+        updated_at: r.updatedAt ?? null,
+        published_at: r.publishedAt ?? null,
+        categories: map.get(r.id) ?? [],
+      })),
+    };
+  }
+
+  // ================================ End Filter ====================================== //
 
   async create(
     actingUser: { id: number; role?: string },
