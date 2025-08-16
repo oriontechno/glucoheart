@@ -11,7 +11,8 @@ import {
   ParseIntPipe,
   UploadedFile,
   UseInterceptors,
-  Put,
+  UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
 import { ArticlesService } from './articles.service';
 import { Request } from 'express';
@@ -25,13 +26,16 @@ import {
   createArticleSchema,
   updateArticleSchema,
   attachImageSchema,
-  type CreateArticleDto,
-  type UpdateArticleDto,
+  // type CreateArticleDto,
+  // type UpdateArticleDto,
   type AttachImageDto,
 } from './schema/articles.schema';
+import { CreateArticleDto } from './dto/create-article.dto';
+import { UpdateArticleDto } from './dto/update-article.dto';
 import { SetArticleCategoriesDto } from './dto/set-article-categories.dto';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 function ensureUploadDir(dir: string) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -63,7 +67,7 @@ const multerImageOptions = {
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
   fileFilter: imageFileFilter,
 } as const;
-
+@UseGuards(JwtAuthGuard)
 @Controller('articles')
 export class ArticlesController {
   constructor(private readonly svc: ArticlesService) {}
@@ -135,33 +139,57 @@ export class ArticlesController {
 
   // ===== Admin/Support =====
   @Post()
-  @ZodValidation(createArticleSchema)
-  async create(
-    @Req() req: Request & { user: RequestUser },
-    @Body() dto: CreateArticleDto,
+  // @ZodValidation(createArticleSchema)
+  @UseInterceptors(FileInterceptor('cover', multerImageOptions))
+  async createWithCover(
+    @Req() req: Request & { user: { id: number; role?: string } },
+    @Body() body: any,
+    @UploadedFile() cover?: Express.Multer.File,
   ) {
-    const { user } = req;
-    return this.svc.create({ id: user.id, role: user.role }, dto);
+    const user = { id: Number(req.user.id), role: req.user.role };
+    console.log('BODY FIELDS:', body); // 👈 cek di console
+    console.log(
+      'FILE:',
+      cover?.fieldname,
+      cover?.originalname,
+      cover?.mimetype,
+      cover?.size,
+    );
+    return this.svc.createWithOptionalCover(
+      user,
+      {
+        title: body?.title,
+        summary: body?.summary,
+        content: body?.content,
+        status: body?.status, // 'draft' | 'published'
+        categories: body?.categories, // "slug1.slug2"
+        coverAlt: body?.coverAlt,
+        // opsi B (tanpa file) bisa pakai coverUrl, lihat Opsi B di bawah
+      },
+      cover,
+    );
   }
 
   @Patch(':id')
-  @ZodValidation(updateArticleSchema)
-  async update(
-    @Req() req: Request & { user: RequestUser },
+  // @ZodValidation(updateArticleSchema)
+  @UseInterceptors(FileInterceptor('cover', multerImageOptions))
+  async updateWithCover(
+    @Req() req: Request & { user: { id: number; role?: string } },
     @Param('id', ParseIntPipe) id: number,
-    @Body() dto: UpdateArticleDto,
+    @Body() body: UpdateArticleDto, // field text lain tetap bisa dikirim (title, status, categories, coverAlt, removeCover)
+    @UploadedFile() cover?: Express.Multer.File,
   ) {
-    const { user } = req;
-    return this.svc.update({ id: user.id, role: user.role }, id, dto);
+    const user = { id: Number(req.user.id), role: req.user.role };
+    return this.svc.updateWithOptionalCover(user, id, body, cover);
   }
 
   @Delete(':id')
-  async delete(
-    @Req() req: Request & { user: RequestUser },
+  async remove(
+    @Req() req: Request & { user: { id: number; role?: string } },
     @Param('id', ParseIntPipe) id: number,
   ) {
-    const { user } = req;
-    return this.svc.delete({ id: user.id, role: user.role }, id);
+    const user = { id: Number(req.user.id), role: req.user.role };
+    return this.svc.deleteArticle(user, id);
   }
 
   @Post(':id/publish')
@@ -225,30 +253,11 @@ export class ArticlesController {
     return { url: publicUrl };
   }
 
-  @Post(':id/images/editor')
-  @UseInterceptors(FileInterceptor('upload', multerImageOptions)) // ⬅️ gunakan options bersama
-  async editorUpload(
-    @Req() req: Request & { user: { id: number; role?: string } },
-    @Param('id', ParseIntPipe) id: number,
-    @UploadedFile() file: Express.Multer.File,
-    @Body() dto: { alt?: string; position?: number },
-  ) {
-    if (!file) throw new Error('No file uploaded');
-
-    // Bangun URL publik cross-platform
-    const rel = relJoin('uploads', 'articles', path.basename(file.path));
-    const publicUrl = '/' + rel.replace(/\\/g, '/');
-
-    const { user } = req;
-    const result = await this.svc.uploadEditorImage(
-      { id: user.id, role: user.role },
-      id,
-      { url: publicUrl, storageKey: file.path },
-      { alt: dto?.alt, position: dto?.position },
-    );
-
-    // CKEditor expects { url } (bisa juga { uploaded: true, url })
-    return { url: result.url };
+  @Post('editor/upload')
+  @UseInterceptors(FileInterceptor('file', multerImageOptions))
+  async editorUpload(@UploadedFile() file?: Express.Multer.File) {
+    if (!file) throw new BadRequestException('file is required');
+    return this.svc.editorUpload(file);
   }
 
   // ===== Public =====
@@ -287,7 +296,7 @@ export class ArticlesController {
     );
   }
 
-  @Put('categories/:id')
+  @Patch('categories/:id')
   async updateCategory(
     @Req() req: Request & { user: { id: number; role?: string } },
     @Param('id', ParseIntPipe) id: number,

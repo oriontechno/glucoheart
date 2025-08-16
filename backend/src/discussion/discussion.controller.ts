@@ -7,7 +7,7 @@ import {
   Req,
   ParseIntPipe,
   Query,
-  Put,
+  Patch,
   Delete,
 } from '@nestjs/common';
 import { DiscussionService } from './discussion.service';
@@ -72,7 +72,7 @@ export class DiscussionController {
     return this.svc.createRoom({ id: user.id, role: user.role }, dto);
   }
 
-  @Put('rooms/:roomId')
+  @Patch('rooms/:roomId')
   @ZodValidation(updateRoomSchema)
   async updateRoom(
     @Req() req: Request & { user: RequestUser },

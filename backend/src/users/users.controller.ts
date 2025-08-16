@@ -5,7 +5,7 @@ import {
   Body,
   Param,
   Delete,
-  Put,
+  Patch,
   Query,
   UseGuards,
   Request,
@@ -73,8 +73,8 @@ export class UsersController {
     return this.usersService.findOne(+id);
   }
 
-  @Put(':id')
-  @ZodValidation(updateUserSchema)
+  @Patch(':id')
+  // @ZodValidation(updateUserSchema)
   update(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
