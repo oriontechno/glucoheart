@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { users } from '../db/schema';
@@ -229,16 +230,19 @@ export class UsersService {
     const newHash = await argon2.hash(dto.newPassword, {
       type: argon2.argon2id,
     });
+    try {
+      await this.db
+        .update(users as any)
+        .set({ passwordHash: newHash, passwordUpdatedAt: new Date() } as any)
+        .where(eq(users.id as any, actingUser.id));
 
-    await this.db
-      .update(users as any)
-      .set({ passwordHash: newHash, passwordUpdatedAt: new Date() } as any)
-      .where(eq(users.id as any, actingUser.id));
+      // Emit event for downstream (e.g., revoke sessions, notify user)
+      this.events.emit('user.password.changed', { userId: actingUser.id });
 
-    // Emit event for downstream (e.g., revoke sessions, notify user)
-    this.events.emit('user.password.changed', { userId: actingUser.id });
-
-    return { ok: true };
+      return { ok: true };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to change password');
+    }
   }
 
   async adminResetPassword(
@@ -263,41 +267,49 @@ export class UsersService {
       type: argon2.argon2id,
     });
 
-    await this.db
-      .update(users as any)
-      .set({ passwordHash: newHash, passwordUpdatedAt: new Date() } as any)
-      .where(eq(users.id as any, dto.userId));
+    try {
+      await this.db
+        .update(users as any)
+        .set({ passwordHash: newHash, passwordUpdatedAt: new Date() } as any)
+        .where(eq(users.id as any, dto.userId));
 
-    this.events.emit('user.password.reset', {
-      userId: dto.userId,
-      byAdminId: actingUser.id,
-    });
-    return { ok: true };
+      this.events.emit('user.password.reset', {
+        userId: dto.userId,
+        byAdminId: actingUser.id,
+      });
+      return { ok: true };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to reset password');
+    }
   }
 
   async create(createUserDto: CreateUserDto, currentUserRole: string) {
     const { email, password, firstName, lastName, role } = createUserDto;
 
     // Only superadmin can create admin users
-    if (role === 'admin' && currentUserRole !== 'superadmin') {
-      throw new ForbiddenException('Only superadmin can create admin users');
+    if (role === 'SUPPORT' && currentUserRole !== 'ADMIN') {
+      throw new ForbiddenException('Only Admin can create Support users');
     }
 
     // Hash password if provided
     const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
-    const newUser = await this.db
-      .insert(users)
-      .values({
-        email,
-        password: hashedPassword,
-        firstName,
-        lastName,
-        role: ROLES.USER,
-      })
-      .returning();
+    try {
+      const newUser = await this.db
+        .insert(users)
+        .values({
+          email,
+          password: hashedPassword,
+          firstName,
+          lastName,
+          role: role.toUpperCase(),
+        })
+        .returning();
 
-    return newUser[0];
+      return newUser[0];
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to create user');
+    }
   }
 
   async update(
@@ -309,15 +321,15 @@ export class UsersService {
     // Find the user to be updated
     const userToUpdate = await this.findOne(id);
 
-    // Only superadmin can update admin users
-    if (userToUpdate.role === 'admin' && currentUserRole !== 'superadmin') {
-      throw new ForbiddenException('Only superadmin can update admin users');
+    // Only Admin can update Support users
+    if (userToUpdate.role === 'SUPPORT' && currentUserRole !== 'ADMIN') {
+      throw new ForbiddenException('Only Admin can update Support users');
     }
 
     // Users can only update their own profile, unless they're admin or superadmin
     if (
       currentUserId !== id &&
-      !['admin', 'superadmin'].includes(currentUserRole)
+      !['SUPPORT', 'ADMIN'].includes(currentUserRole)
     ) {
       throw new ForbiddenException('You can only update your own profile');
     }
@@ -328,32 +340,40 @@ export class UsersService {
       updateData.password = await bcrypt.hash(updateUserDto.password, 10);
     }
 
-    // Only superadmin can change roles
-    if (updateUserDto.role && currentUserRole !== 'superadmin') {
+    // Only Admin can change roles
+    if (updateUserDto.role && currentUserRole !== 'ADMIN') {
       delete updateData.role;
     }
 
-    const updatedUser = await this.db
-      .update(users)
-      .set({
-        ...updateData,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, id))
-      .returning();
+    try {
+      const updatedUser = await this.db
+        .update(users)
+        .set({
+          ...updateData,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, id))
+        .returning();
 
-    return updatedUser[0];
+      return updatedUser[0];
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update user');
+    }
   }
 
   async remove(id: number, currentUserRole: string) {
     const userToDelete = await this.findOne(id);
 
-    // Only superadmin can delete admin users
-    if (userToDelete.role === 'admin' && currentUserRole !== 'superadmin') {
-      throw new ForbiddenException('Only superadmin can delete admin users');
+    // Only Admin can delete Support users
+    if (userToDelete.role === 'SUPPORT' && currentUserRole !== 'ADMIN') {
+      throw new ForbiddenException('Only Admin can delete Support users');
     }
 
-    await this.db.delete(users).where(eq(users.id, id));
-    return { message: 'User deleted successfully' };
+    try {
+      await this.db.delete(users).where(eq(users.id, id));
+      return { message: 'User deleted successfully' };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to delete user');
+    }
   }
 }
