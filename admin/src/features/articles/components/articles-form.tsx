@@ -26,7 +26,7 @@ import * as z from 'zod';
 import { FileUploader } from '@/components/file-uploader';
 import { ACCEPTED_IMAGE_TYPES, MAX_FILE_SIZE } from '@/constants/form';
 import { useState, useEffect } from 'react';
-import { getArticleCategoriesFromMockData } from './articles-tables/columns';
+import { articleCategoriesService } from '@/lib/api/article-categories.service';
 
 export default function ArticlesForm({
   initialData,
@@ -48,7 +48,12 @@ export default function ArticlesForm({
     const loadCategories = async () => {
       try {
         setIsLoadingCategories(true);
-        const options = await getArticleCategoriesFromMockData();
+        const apiResponse = await articleCategoriesService.getAll();
+        // Format the API response to options format
+        const options = apiResponse.map((category: any) => ({
+          value: category.name,
+          label: category.name.charAt(0).toUpperCase() + category.name.slice(1)
+        }));
         setCategoryOptions(options);
       } catch (error) {
         console.error('Error loading categories:', error);

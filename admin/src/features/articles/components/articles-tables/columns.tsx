@@ -3,13 +3,13 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { Text } from 'lucide-react';
 import { CellAction } from './cell-action';
-import { Article } from '@/constants/mock-api';
 import { getArticleCategoriesSync } from '@/lib/api/article-categories.service';
 import {
   createArticleColumnsConfig,
   type ArticleColumnsConfig
 } from '@/lib/columns/article-columns';
 import Image from 'next/image';
+import { Article } from '@/types/entity';
 
 // Re-export the type for convenience
 export type { ArticleColumnsConfig };
@@ -18,22 +18,22 @@ export type { ArticleColumnsConfig };
 export const createArticleColumnsFromConfig = (
   config: ArticleColumnsConfig
 ): ColumnDef<Article>[] => [
-  {
-    accessorKey: 'image_url',
-    header: 'IMAGE',
-    cell: ({ row }) => {
-      return (
-        <div className='relative aspect-square'>
-          <Image
-            src={row.getValue('image_url')}
-            alt={row.getValue('title')}
-            fill
-            className='rounded-lg'
-          />
-        </div>
-      );
-    }
-  },
+  // {
+  //   accessorKey: 'image_url',
+  //   header: 'IMAGE',
+  //   cell: ({ row }) => {
+  //     return (
+  //       <div className='relative aspect-square'>
+  //         <Image
+  //           src={row.getValue('image_url')}
+  //           alt={row.getValue('title')}
+  //           fill
+  //           className='rounded-lg'
+  //         />
+  //       </div>
+  //     );
+  //   }
+  // },
   {
     id: 'title',
     accessorKey: 'title',
@@ -51,17 +51,18 @@ export const createArticleColumnsFromConfig = (
     enableSorting: true
   },
   {
-    id: 'category',
-    accessorKey: 'category',
+    id: 'categories',
+    accessorKey: 'categories',
     header: ({ column }: { column: Column<Article, unknown> }) => (
-      <DataTableColumnHeader column={column} title='Category' />
+      <DataTableColumnHeader column={column} title='Categories' />
     ),
     cell: ({ cell }) => {
-      const categoryValue = cell.getValue<Article['category']>();
-      const categoryOption = config.categoryOptions.find(
-        (option) => option.value === categoryValue
+      const categoryValue = cell.getValue<Article['categories']>();
+      return (
+        <div>
+          {categoryValue?.map((cat) => cat.name).join(', ') || 'No Category'}
+        </div>
       );
-      return <div>{categoryOption?.label || categoryValue}</div>;
     },
     enableColumnFilter: true,
     enableSorting: true,

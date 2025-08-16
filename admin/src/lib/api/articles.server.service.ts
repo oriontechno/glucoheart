@@ -32,7 +32,7 @@ export class ArticlesServerService {
     try {
       const authConfig = await this.getAuthenticatedRequest();
 
-      const response = await api.get('/articles/admin', {
+      const response = await api.get('/articles/search', {
         params: filters,
         ...authConfig
       });

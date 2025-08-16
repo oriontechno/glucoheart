@@ -20,6 +20,7 @@ export default async function ArticlesListingPage({}: ArticlesListingPageProps) 
   const filters = {
     page,
     limit: pageLimit,
+    scope: 'admin',
     ...(search && { search }),
     ...(categories && { category: categories }),
     ...(sort && { sort })
@@ -31,10 +32,9 @@ export default async function ArticlesListingPage({}: ArticlesListingPageProps) 
   // Create server-safe column config (no client components)
   const columnsConfig = createArticleColumnsConfig(categoryOptions);
 
-  const data = await fakeArticles.getArticles(filters);
-  const data2 = await ArticlesServerService.getAdminArticles(filters);
-  const totalArticles = data.total_articles;
-  const articles: Article[] = data.articles;
+  const data = await ArticlesServerService.getAdminArticles(filters);
+  const totalArticles = data.data.total_articles;
+  const articles: Article[] = data.data.articles;
 
   return (
     <ArticlesTable

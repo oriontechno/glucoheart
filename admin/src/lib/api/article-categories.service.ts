@@ -1,4 +1,19 @@
 import { fakeArticleCategories } from '@/constants/mock-api';
+import api from '../axios';
+
+export const articleCategoriesService = {
+  getAll: async () => {
+    try {
+      const response = await api.get('/articles/categories');
+      return response.data;
+    } catch (error) {
+      console.error('API call failed, falling back to mock data:', error);
+      // Fallback to mock data if API fails
+      const categories = await fakeArticleCategories.getAll({});
+      return categories;
+    }
+  }
+};
 
 // Helper function to ensure categories are available and convert to options format
 const formatCategoriesAsOptions = (categories: any[]) => {
