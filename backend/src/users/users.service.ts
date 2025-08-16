@@ -30,14 +30,17 @@ export class UsersService {
     const [u] = await this.db
       .select({
         id: users.id,
-        passwordHash: (users as any).passwordHash,
-        updatedAt: (users as any).updatedAt,
+        passwordHash: users.password, // <- alias dari kolom 'password'
+        updatedAt: users.updatedAt, // <- kolom ada di schema
       })
-      .from(users as any)
-      .where(eq(users.id as any, userId));
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
     if (!u) throw new NotFoundException('User not found');
-    if (!u.passwordHash)
+    if (!u.passwordHash) {
       throw new BadRequestException('Password is not set for this user');
+    }
     return u.passwordHash as string;
   }
 
@@ -211,7 +214,10 @@ export class UsersService {
     return user;
   }
 
-  async changePassword(actingUser: { id: number }, dto: ChangePasswordDto) {
+  async changePassword(
+    actingUser: { id: number },
+    dto: { currentPassword: string; newPassword: string },
+  ) {
     if (dto.newPassword === dto.currentPassword) {
       throw new BadRequestException(
         'Password baru tidak boleh sama dengan password lama',
@@ -219,24 +225,34 @@ export class UsersService {
     }
 
     const issues = validatePasswordStrength(dto.newPassword);
-    if (issues.length)
+    if (issues.length) {
       throw new BadRequestException('Password lemah: ' + issues.join(', '));
+    }
 
+    // ambil hash sekarang dari DB
     const currentHash = await this.getUserPasswordHash(actingUser.id);
-    const ok = await bcrypt.compare(currentHash, dto.currentPassword);
 
-    if (!ok) throw new ForbiddenException('Password saat ini salah');
+    // ✅ urutan benar: compare(plain, hash)
+    const ok = await bcrypt.compare(dto.currentPassword, currentHash);
+    if (!ok) {
+      throw new ForbiddenException('Password saat ini salah');
+    }
+
     const newHash = await bcrypt.hash(dto.newPassword, 10);
+
     try {
       await this.db
-        .update(users as any)
-        .set({ passwordHash: newHash, passwordUpdatedAt: new Date() } as any)
-        .where(eq(users.id as any, actingUser.id));
+        .update(users)
+        .set({
+          password: newHash, // ✅ kolom sesuai schema
+          updatedAt: new Date(), // ✅ gunakan updatedAt
+        })
+        .where(eq(users.id, actingUser.id));
 
-      // Emit event for downstream (e.g., revoke sessions, notify user)
-      this.events.emit('user.password.changed', { userId: actingUser.id });
+      // Emit event downstream kalau kamu memang punya event emitter ini
+      this.events?.emit?.('user.password.changed', { userId: actingUser.id });
 
-      return { ok: true };
+      return { message: 'Password changed successfully' };
     } catch (error) {
       throw new InternalServerErrorException('Failed to change password');
     }
