@@ -7,10 +7,12 @@ export type User = {
   created_at: string;
 };
 
-export type Category = {
+export type ArticleCategory = {
   id: number;
   name: string;
   slug: string;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Article = {
@@ -23,5 +25,5 @@ export type Article = {
   created_at: string; // kalau mau bisa ubah ke Date
   updated_at: string;
   published_at: string;
-  categories: Category[];
+  categories: ArticleCategory[];
 };

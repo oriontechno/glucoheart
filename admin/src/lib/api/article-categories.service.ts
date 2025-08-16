@@ -2,9 +2,11 @@ import { fakeArticleCategories } from '@/constants/mock-api';
 import api from '../axios';
 
 export const articleCategoriesService = {
-  getAll: async () => {
+  getAll: async (filters?: { [key: string]: any }) => {
     try {
-      const response = await api.get('/articles/categories');
+      const response = await api.get('/articles/categories', {
+        params: filters
+      });
       return response.data;
     } catch (error) {
       console.error('API call failed, falling back to mock data:', error);
