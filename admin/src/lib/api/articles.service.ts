@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import api from '../axios';
 
 export const articlesService = {
@@ -27,5 +28,15 @@ export const articlesService = {
       }
     });
     return response.data;
+  },
+
+  delete: async (id: number) => {
+    try {
+      const response = await api.delete(`/articles/${id}`);
+      response.data;
+      toast.success('Article deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete article');
+    }
   }
 };

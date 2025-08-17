@@ -39,7 +39,7 @@ export default function ArticlesForm({
     initialData?.image_url || null
   );
   const [categoryOptions, setCategoryOptions] = useState<
-    Array<{ value: string; label: string }>
+    Array<{ value: number; label: string }>
   >([]);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
 
@@ -51,9 +51,11 @@ export default function ArticlesForm({
         const apiResponse = await articleCategoriesService.getAll();
         // Format the API response to options format
         const options = apiResponse.map((category: any) => ({
-          value: category.name,
-          label: category.name.charAt(0).toUpperCase() + category.name.slice(1)
+          value: category.id,
+          label: category.name
         }));
+
+        console.log({ options });
         setCategoryOptions(options);
       } catch (error) {
         console.error('Error loading categories:', error);
@@ -78,7 +80,7 @@ export default function ArticlesForm({
     content: z.string().min(10, {
       message: 'Article content must be at least 10 characters.'
     }),
-    category: z.string().refine((val) => availableCategories.includes(val), {
+    category: z.number().refine((val) => availableCategories.includes(val), {
       message: 'Please select a valid category.'
     }),
     image_url: z
@@ -138,6 +140,8 @@ export default function ArticlesForm({
         : new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
+
+    console.log({ articleData });
   }
 
   return (
@@ -161,7 +165,7 @@ export default function ArticlesForm({
                       <FileUploader
                         value={field.value}
                         onValueChange={field.onChange}
-                        maxFiles={4}
+                        maxFiles={1}
                         maxSize={4 * 1024 * 1024}
                         // disabled={loading}
                         // progresses={progresses}

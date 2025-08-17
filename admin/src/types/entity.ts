@@ -19,11 +19,7 @@ export type Article = {
   id: number;
   title: string;
   slug: string;
-  status: 'published' | 'draft' | 'archived'; // bisa pakai union biar ketat
+  status: 'published' | 'draft'; // bisa pakai union biar ketat
   summary: string;
-  coverImageId: number;
-  created_at: string; // kalau mau bisa ubah ke Date
-  updated_at: string;
-  published_at: string;
-  categories: ArticleCategory[];
+  categories: string[];
 };
