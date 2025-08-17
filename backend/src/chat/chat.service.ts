@@ -48,45 +48,58 @@ export class ChatService {
     if (!p) throw new ForbiddenException('Not a participant of this session.');
   }
 
+  /** helper untuk melengkapi message + info user */
+  private mapMessageRow(row: {
+    id: number;
+    sessionId: number;
+    senderId: number;
+    content: string;
+    createdAt: Date;
+    firstName?: string | null;
+    lastName?: string | null;
+    profilePicture?: string | null;
+    role?: string | null;
+  }) {
+    const first = (row.firstName ?? '').trim();
+    const last  = (row.lastName ?? '').trim();
+    const fullName = `${first} ${last}`.trim();
+
+    return {
+      id: row.id,
+      sessionId: row.sessionId,
+      senderId: row.senderId,
+      content: row.content,
+      createdAt: row.createdAt,
+      senderName: fullName || undefined,
+      senderAvatar: row.profilePicture || undefined,
+      senderRole: row.role || undefined, // <— penting: role pengirim
+    };
+  }
+
   // Create or return existing one-to-one session by role (ADMIN/SUPPORT)
-  async getOrCreateOneToOneSessionByRole(
-    currentUserId: number,
-    role: 'ADMIN' | 'SUPPORT',
-  ) {
-    // Pick one user with the target role. Adjust query if your schema uses roleId/relations.
+  async getOrCreateOneToOneSessionByRole(currentUserId: number, role: 'ADMIN' | 'SUPPORT') {
     const [u] = await this.db
       .select({ id: users.id })
       .from(users as any)
-      // If your users table stores role name directly:
-      // .where(eq(users.role, role as any))
-      // If you use a roles table, replace the predicate below with a join to roles.
       .where(
         (users as any).role
           ? eq((users as any).role, role as any)
           : eq(users.id, -1),
-      ) // fallback impossible when no role column
+      )
       .limit(1);
 
     if (!u) throw new NotFoundException(`No available user with role ${role}.`);
-    return this.getOrCreateOneToOneSession(currentUserId, {
-      targetUserId: u.id,
-    });
+    return this.getOrCreateOneToOneSession(currentUserId, { targetUserId: u.id });
   }
 
   // Create or return existing one-to-one session
-  async getOrCreateOneToOneSession(
-    currentUserId: number,
-    dto: CreateSessionDto,
-  ) {
+  async getOrCreateOneToOneSession(currentUserId: number, dto: CreateSessionDto) {
     if (currentUserId === dto.targetUserId) {
-      throw new BadRequestException(
-        'Cannot create a one-to-one session with yourself.',
-      );
+      throw new BadRequestException('Cannot create a one-to-one session with yourself.');
     }
     const pair = this.normalizePair(currentUserId, dto.targetUserId);
 
     try {
-      // Try find first
       const existing = await this.db
         .select()
         .from(chatSessions)
@@ -100,7 +113,6 @@ export class ChatService {
 
       if (existing.length > 0) {
         const session = existing[0];
-        // Ensure both participants exist (idempotent)
         await this.db
           .insert(chatSessionParticipants)
           .values([
@@ -111,7 +123,6 @@ export class ChatService {
         return session;
       }
 
-      // Create within transaction to avoid race conditions
       return await this.db.transaction(async (tx) => {
         const [session] = await tx
           .insert(chatSessions)
@@ -127,16 +138,12 @@ export class ChatService {
       });
     } catch (error) {
       console.error('Failed to create or retrieve one-to-one session:', error);
-      throw new InternalServerErrorException(
-        'Failed to create or retrieve one-to-one session',
-      );
+      throw new InternalServerErrorException('Failed to create or retrieve one-to-one session');
     }
   }
 
   // Send a message within a session
   async sendMessage(sessionId: number, senderId: number, dto: SendMessageDto) {
-    // Verify membership (member or nurse)
-
     try {
       await this.ensureUserIsParticipant(sessionId, senderId);
 
@@ -158,11 +165,33 @@ export class ChatService {
         return msg;
       });
 
+      // Lengkapi message dengan user info
+      const [row] = await this.db
+        .select({
+          id: messages.id,
+          sessionId: messages.sessionId,
+          senderId: messages.senderId,
+          content: messages.content,
+          createdAt: messages.createdAt,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profilePicture: users.profilePicture,
+          role: (users as any).role,
+        })
+        .from(messages)
+        .leftJoin(users, eq(users.id, messages.senderId))
+        .where(eq(messages.id, inserted.id))
+        .limit(1);
+
+      const payload = this.mapMessageRow(row);
+
+      // Emit event untuk gateway
       this.events.emit('chat.message.created', {
         sessionId,
-        messageId: inserted.id,
+        message: payload, // <— kirim payload lengkap (bukan hanya id)
       });
-      return inserted;
+
+      return payload;
     } catch (error) {
       console.error('Failed to send message:', error);
       throw new InternalServerErrorException('Failed to send message');
@@ -175,12 +204,23 @@ export class ChatService {
       await this.ensureUserIsParticipant(sessionId, userId);
 
       const rows = await this.db
-        .select()
+        .select({
+          id: messages.id,
+          sessionId: messages.sessionId,
+          senderId: messages.senderId,
+          content: messages.content,
+          createdAt: messages.createdAt,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profilePicture: users.profilePicture,
+          role: (users as any).role,
+        })
         .from(messages)
+        .leftJoin(users, eq(users.id, messages.senderId))
         .where(eq(messages.sessionId, sessionId))
         .orderBy(asc(messages.createdAt));
 
-      return rows;
+      return rows.map((r) => this.mapMessageRow(r));
     } catch (error) {
       console.error('Failed to fetch messages:', error);
       throw new InternalServerErrorException('Failed to fetch messages');
@@ -208,19 +248,28 @@ export class ChatService {
       .from(chatSessionParticipants)
       .where(inArray(chatSessionParticipants.sessionId, sessionIds));
 
-    const lastMessages = await this.db
-      .select()
-      .from(messages)
-      .where(
-        inArray(
-          messages.id,
-          sessions.filter((s) => s.lastMessageId).map((s) => s.lastMessageId!),
-        ),
-      );
+    // ambil last messages join users
+    const lmIds = sessions.filter((s) => s.lastMessageId).map((s) => s.lastMessageId!);
+    const lmRows = lmIds.length
+      ? await this.db
+          .select({
+            id: messages.id,
+            sessionId: messages.sessionId,
+            senderId: messages.senderId,
+            content: messages.content,
+            createdAt: messages.createdAt,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            profilePicture: users.profilePicture,
+            role: (users as any).role,
+          })
+          .from(messages)
+          .leftJoin(users, eq(users.id, messages.senderId))
+          .where(inArray(messages.id, lmIds))
+      : [];
 
-    const lastMessageById = new Map(
-      lastMessages.map((m) => [m.id, m] as const),
-    );
+    const lastMap = new Map(lmRows.map((r) => [r.id, this.mapMessageRow(r)]));
+
     const participantsBySession = new Map<number, typeof participants>();
     for (const p of participants) {
       const arr = participantsBySession.get(p.sessionId) ?? [];
@@ -231,9 +280,7 @@ export class ChatService {
     return sessions.map((s) => ({
       ...s,
       participants: participantsBySession.get(s.id) ?? [],
-      lastMessage: s.lastMessageId
-        ? (lastMessageById.get(s.lastMessageId) ?? null)
-        : null,
+      lastMessage: s.lastMessageId ? (lastMap.get(s.lastMessageId) ?? null) : null,
     }));
   }
 

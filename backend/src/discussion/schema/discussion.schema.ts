@@ -10,6 +10,16 @@ export const createRoomSchema = z
     topic: true,
   });
 
+export const updateRoomSchema = z
+  .object({
+    topic: z.string().min(3, 'Topic must be at least 3 characters').trim(),
+    description: z.string().optional(),
+    isPublic: z.boolean().optional().default(true),
+  })
+  .required({
+    topic: true,
+  });
+
 export const discussionSendMessageSchema = z
   .object({
     content: z
@@ -24,3 +34,4 @@ export type CreateRoomDto = z.infer<typeof createRoomSchema>;
 export type DiscussionSendMessageDto = z.infer<
   typeof discussionSendMessageSchema
 >;
+export type UpdateRoomDto = z.infer<typeof updateRoomSchema>;

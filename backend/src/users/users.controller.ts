@@ -5,7 +5,7 @@ import {
   Body,
   Param,
   Delete,
-  Put,
+  Patch,
   Query,
   UseGuards,
   Request,
@@ -73,8 +73,8 @@ export class UsersController {
     return this.usersService.findOne(+id);
   }
 
-  @Put(':id')
-  @ZodValidation(updateUserSchema)
+  @Patch(':id')
+  // @ZodValidation(updateUserSchema)
   update(
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
@@ -89,13 +89,13 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles('admin', 'superadmin')
+  @Roles('ADMIN', 'SUPPORT')
   remove(@Param('id') id: string, @Request() req) {
     return this.usersService.remove(+id, req.user.role);
   }
 
   @Post('change-password')
-  @ZodValidation(changePasswordSchema)
+  // @ZodValidation(changePasswordSchema)
   async changePassword(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: ChangePasswordDto,

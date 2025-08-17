@@ -13,36 +13,32 @@ import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { and, eq } from 'drizzle-orm';
-import {
-  discussionParticipants,
-  discussionRooms,
-  discussionMessages,
-} from '../db/schema';
-import { DiscussionService } from './discussion.service';
+import { discussionParticipants, discussionRooms } from '../db/schema';
 
 interface AuthedSocket extends Socket {
   data: { user?: { id: number; role?: string } };
 }
 
-@WebSocketGateway({ 
-  namespace: '/discussion', 
+@WebSocketGateway({
+  namespace: '/discussion',
   cors: {
     origin: '*',
     methods: ['GET', 'POST'],
     credentials: true,
-  }
+  },
+  transports: ['websocket'],
 })
 export class DiscussionGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(DiscussionGateway.name);
+  private readonly LOBBY = 'lobby';
 
   @WebSocketServer() io!: Server;
 
   constructor(
     @Inject('DATABASE_CONNECTION')
     private readonly db: NodePgDatabase<typeof import('../db/schema')>,
-    private readonly svc: DiscussionService,
     private readonly jwt: JwtService,
   ) {}
 
@@ -62,14 +58,15 @@ export class DiscussionGateway
       const userId = Number(payload?.userId ?? payload?.id ?? payload?.sub);
       if (!userId || Number.isNaN(userId)) return socket.disconnect(true);
       socket.data.user = { id: userId, role: payload?.role };
-    } catch (e) {
+    } catch {
       socket.disconnect(true);
     }
   }
 
   async handleDisconnect(_socket: AuthedSocket) {}
 
-  @SubscribeMessage('room.join')
+  // === JOIN/LEAVE ROOM (untuk layar room chat) ===
+  @SubscribeMessage('discussion.join')
   async onJoin(
     @ConnectedSocket() socket: AuthedSocket,
     @MessageBody() payload: { roomId: number },
@@ -90,7 +87,7 @@ export class DiscussionGateway
         .insert(discussionParticipants)
         .values({ roomId, userId, role: 'member' })
         .onConflictDoNothing();
-      socket.join(`room:${roomId}`);
+      socket.join(this.room(roomId));
       return { ok: true };
     }
 
@@ -105,32 +102,62 @@ export class DiscussionGateway
       );
     if (!p) return { ok: false, error: 'not a participant' };
 
-    socket.join(`room:${roomId}`);
+    socket.join(this.room(roomId));
     return { ok: true };
   }
 
-  @SubscribeMessage('message.send')
-  async onSend(
+  @SubscribeMessage('discussion.leave')
+  async onLeave(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() payload: { roomId: number; content: string },
+    @MessageBody() payload: { roomId: number },
   ) {
-    const userId = socket.data.user?.id;
-    if (!userId) return { ok: false, error: 'unauthorized' };
-    if (!payload?.roomId || !payload?.content)
-      return { ok: false, error: 'invalid payload' };
-
-    const msg = await this.svc.sendMessage(payload.roomId, userId, {
-      content: payload.content,
-    });
-    return { ok: true, message: msg };
+    const roomId = Number(payload?.roomId);
+    if (!roomId) return;
+    socket.leave(this.room(roomId));
   }
 
-  @OnEvent('discussion.message.created')
-  async handleMessageCreated(payload: { roomId: number; messageId: number }) {
-    const [m] = await this.db
-      .select()
-      .from(discussionMessages)
-      .where(eq(discussionMessages.id, payload.messageId));
-    if (m) this.io.to(`room:${payload.roomId}`).emit('message.new', m);
+  // === LOBBY (untuk layar list room) ===
+  @SubscribeMessage('discussion.lobby.join')
+  async onLobbyJoin(@ConnectedSocket() socket: AuthedSocket) {
+    // cukup join satu “ruangan” global
+    socket.join(this.LOBBY);
+    return { ok: true };
+  }
+
+  @SubscribeMessage('discussion.lobby.leave')
+  async onLobbyLeave(@ConnectedSocket() socket: AuthedSocket) {
+    socket.leave(this.LOBBY);
+    return { ok: true };
+  }
+
+  private room(id: number) {
+    return `room:${id}`;
+  }
+
+  /**
+   * Service mem-publish payload pesan LENGKAP via event emitter.
+   * Kita broadcast ke:
+   * - room:<roomId>   => untuk layar room chat
+   * - LOBBY           => untuk layar list room (agar bisa update preview & bump urutan)
+   */
+  @OnEvent('discussion.message.created', { async: true })
+  handleMessageCreated(payload: {
+    id: number;
+    roomId: number;
+    senderId: number;
+    content: string;
+    createdAt: Date;
+    senderName?: string;
+    senderAvatar?: string;
+  }) {
+    // broadcast ke room yang relevan
+    this.io.to(this.room(payload.roomId))
+      .emit('discussion.message.created', payload);
+
+    // broadcast ringkas ke lobby untuk update list
+    this.io.to(this.LOBBY).emit('discussion.room.updated', {
+      roomId: payload.roomId,
+      lastMessage: payload, // biar front-end bisa langsung tampilkan preview & waktu
+    });
   }
 }

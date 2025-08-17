@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { Inject } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
@@ -15,6 +16,7 @@ import {
   sql,
   asc,
   notInArray,
+  ne,
 } from 'drizzle-orm';
 import {
   articles,
@@ -23,10 +25,18 @@ import {
   articleCategoryLinks,
 } from '../db/schema';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 
+import { promises as fs } from 'fs';
+import { join, relative, isAbsolute, basename, resolve } from 'path';
+
+type ImageRow = typeof articleImages.$inferSelect;
+
 type ArticleStatus = 'draft' | 'published';
+type ArticleRow = typeof articles.$inferSelect;
+type CategoryRow = typeof articleCategories.$inferSelect;
 
 @Injectable()
 export class ArticlesService {
@@ -48,6 +58,112 @@ export class ArticlesService {
       .replace(/(^-|-$)+/g, '');
   }
 
+  private async cleanupOldCover(
+    tx: NodePgDatabase<any>,
+    prev: ImageRow | undefined | null,
+    opts: { deleteRow?: boolean; deleteFile?: boolean } = {
+      deleteRow: false,
+      deleteFile: false,
+    },
+  ) {
+    if (!prev) return;
+
+    // tandai bukan cover
+    await tx
+      .update(articleImages)
+      .set({ isCover: false })
+      .where(eq(articleImages.id, prev.id));
+
+    if (!opts.deleteRow) return;
+
+    // hapus row hanya jika tidak ada image lain yg pakai storageKey yang sama
+    if (prev.storageKey) {
+      const [{ c }] = await tx
+        .select({ c: sql<number>`count(*)::int` })
+        .from(articleImages)
+        .where(eq(articleImages.storageKey, prev.storageKey));
+
+      if (c <= 1) {
+        await tx.delete(articleImages).where(eq(articleImages.id, prev.id));
+        if (opts.deleteFile) {
+          await fs.unlink(prev.storageKey).catch(() => {});
+        }
+      }
+    } else {
+      // URL tanpa storageKey (mis. set via coverUrl) — aman hapus row
+      await tx.delete(articleImages).where(eq(articleImages.id, prev.id));
+    }
+  }
+
+  private readonly UPLOAD_ROOT = resolve(process.cwd(), 'uploads');
+
+  /** file.path (abs/rel) -> { url: "/uploads/..", storageKey: "uploads/.." } */
+  private toPublicFromPath(p: string) {
+    const abs = isAbsolute(p) ? p : resolve(process.cwd(), p);
+    // jadikan relatif terhadap folder uploads
+    let relToUploads = relative(this.UPLOAD_ROOT, abs).replace(/\\/g, '/'); // "articles/xxx.png"
+    if (relToUploads.startsWith('..') || relToUploads === '') {
+      // fallback jika bukan di bawah /uploads
+      relToUploads = `articles/${basename(abs)}`;
+    }
+    const storageKey = `uploads/${relToUploads}`; // "uploads/articles/xxx.png"
+    const url = `/${storageKey}`; // "/uploads/articles/xxx.png"
+    return { url, storageKey };
+  }
+
+  /** Multer file -> public/url + storageKey */
+  private toPublicFromFile(file: Express.Multer.File) {
+    return this.toPublicFromPath(file.path);
+  }
+
+  /** Ekstrak semua <img src="..."> lokal (hanya yang mulai "/uploads/") dari HTML */
+  private extractInlineImageUrls(html?: string | null): string[] {
+    if (!html) return [];
+    const out = new Set<string>();
+    const re = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html))) {
+      const raw = (m[1] || '').trim();
+      if (!raw) continue;
+      const clean = raw.split('#')[0].split('?')[0];
+      if (clean.startsWith('/uploads/')) out.add(clean);
+    }
+    return Array.from(out);
+  }
+
+  /** "/uploads/.." -> "uploads/.." (untuk fs.unlink) */
+  private urlToStorageKey(url: string): string | null {
+    if (!url || !url.startsWith('/uploads/')) return null;
+    return url.slice(1).replace(/\\/g, '/');
+  }
+
+  private fileToPublic(file: Express.Multer.File) {
+    // Pastikan path absolut → relatif dari project root
+    const abs = isAbsolute(file.path)
+      ? file.path
+      : join(process.cwd(), file.path);
+    let rel = relative(process.cwd(), abs).replace(/\\/g, '/'); // ex: 'uploads/articles/xxx.jpg'
+
+    // Paksa berada di bawah 'uploads/'
+    if (!rel.startsWith('uploads/')) {
+      const idx = rel.indexOf('uploads/');
+      rel = idx >= 0 ? rel.slice(idx) : `uploads/articles/${file.filename}`;
+    }
+
+    const url = `/${rel}`; // ex: '/uploads/articles/xxx.jpg'
+    const storageKey = rel; // ex: 'uploads/articles/xxx.jpg'
+    return { url, storageKey };
+  }
+
+  private async deleteByStorageKey(storageKey: string) {
+    try {
+      const abs = join(process.cwd(), storageKey); // 'uploads/...'
+      await fs.unlink(abs);
+    } catch {
+      // ignore error (file mungkin sudah tidak ada)
+    }
+  }
+
   private async makeUniqueCategorySlug(baseName: string) {
     const base = this.slugify(baseName);
     // ambil semua slug yang diawali base (base, base-2, base-3, ...)
@@ -63,21 +179,6 @@ export class ArticlesService {
     let i = 2;
     while (used.has(`${base}-${i}`)) i++;
     return `${base}-${i}`;
-  }
-
-  private async ensureUniqueSlug(base: string, articleId?: number) {
-    let attempt = 0;
-    while (attempt < 50) {
-      const slug = attempt === 0 ? base : `${base}-${attempt + 1}`;
-      const existing = await this.db
-        .select({ id: articles.id })
-        .from(articles)
-        .where(eq(articles.slug, slug));
-      if (existing.length === 0 || (articleId && existing[0].id === articleId))
-        return slug;
-      attempt++;
-    }
-    throw new BadRequestException('Unable to generate unique slug');
   }
 
   // --- helpers ---
@@ -148,33 +249,216 @@ export class ArticlesService {
     }
   }
 
-  // ==== CATEGORY API ====
+  private async makeUniqueArticleSlug(title: string) {
+    const base = this.slugify(title);
+    const same = await this.db
+      .select({ slug: articles.slug })
+      .from(articles)
+      .where(eq(articles.slug, base));
+    if (!same.length) return base;
 
+    // suffix -2, -3, ...
+    let i = 2;
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const s = `${base}-${i}`;
+      const [row] = await this.db
+        .select({ slug: articles.slug })
+        .from(articles)
+        .where(eq(articles.slug, s))
+        .limit(1);
+      if (!row) return s;
+      i++;
+    }
+  }
+
+  private toPublicUrlFromFile(file: Express.Multer.File) {
+    // contoh: file.path = 'uploads/articles/2025/08/a.jpg'
+    const normalized = file.path.replace(/\\/g, '/'); // Windows safe
+    return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  }
+
+  private parseCategorySlugs(input?: string | null): string[] {
+    if (!input) return [];
+    return Array.from(
+      new Set(
+        input
+          .split('.')
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+  }
+
+  // helper kategori
+  private async upsertCategoryBySlug(slug: string) {
+    const name = slug
+      .replace(/-/g, ' ')
+      .replace(/\b\w/g, (m) => m.toUpperCase());
+    const [exist] = await this.db
+      .select()
+      .from(articleCategories)
+      .where(eq(articleCategories.slug, slug))
+      .limit(1);
+    if (exist) return exist;
+    const [row] = await this.db
+      .insert(articleCategories)
+      .values({ name, slug })
+      .onConflictDoNothing()
+      .returning();
+    if (row) return row;
+    const [ref] = await this.db
+      .select()
+      .from(articleCategories)
+      .where(eq(articleCategories.slug, slug))
+      .limit(1);
+    return ref!;
+  }
+
+  private async linkArticleCategories(
+    tx: any,
+    articleId: number,
+    slugs: string[],
+  ): Promise<CategoryRow[]> {
+    if (!slugs.length) return [];
+
+    // bikin/ambil semua kategori sesuai slug → infer: CategoryRow[]
+    const cats = await Promise.all(
+      slugs.map((s) => this.upsertCategoryBySlug(s)),
+    );
+
+    // insert link (abaikan kalau sudah ada)
+    await tx
+      .insert(articleCategoryLinks)
+      .values(cats.map((c) => ({ articleId, categoryId: c.id })))
+      .onConflictDoNothing();
+
+    return cats;
+  }
+
+  private async replaceArticleCategories(
+    tx: NodePgDatabase<any>,
+    articleId: number,
+    slugs: string[],
+  ) {
+    // resolve slugs -> ids
+    const cats: CategoryRow[] = [];
+    for (const s of slugs) cats.push(await this.upsertCategoryBySlug(s));
+
+    const catIds = cats.map((c) => c.id);
+
+    if (!catIds.length) {
+      await tx
+        .delete(articleCategoryLinks)
+        .where(eq(articleCategoryLinks.articleId, articleId));
+      return;
+    }
+
+    // hapus yang tidak dipilih
+    await tx
+      .delete(articleCategoryLinks)
+      .where(
+        and(
+          eq(articleCategoryLinks.articleId, articleId),
+          notInArray(articleCategoryLinks.categoryId, catIds),
+        ),
+      );
+
+    // tambah yang belum ada
+    await tx
+      .insert(articleCategoryLinks)
+      .values(catIds.map((id) => ({ articleId, categoryId: id })))
+      .onConflictDoNothing();
+  }
+
+  // ==== CATEGORY API ====
   // Create category (ADMIN/SUPPORT)
   async createCategory(
     actingUser: { id: number; role?: string },
     dto: CreateCategoryDto,
   ) {
-    this.assertWriter(actingUser.role);
+    try {
+      this.assertWriter(actingUser.role);
 
-    const slug = await this.makeUniqueCategorySlug(dto.name);
+      const slug = await this.makeUniqueCategorySlug(dto.name);
 
-    const [row] = await this.db
-      .insert(articleCategories)
-      .values({ name: dto.name, slug })
-      .onConflictDoNothing() // jaga-jaga race condition
-      .returning();
+      const [row] = await this.db
+        .insert(articleCategories)
+        .values({ name: dto.name, slug })
+        .onConflictDoNothing() // jaga-jaga race condition
+        .returning();
 
-    if (row) return row;
+      if (row) return row;
 
-    // kalau onConflictDoNothing mem-pasifkan insert (slug keburu dipakai), ambil yang sudah ada
-    const [existing] = await this.db
-      .select()
-      .from(articleCategories)
-      .where(eq(articleCategories.slug, slug))
-      .limit(1);
+      // kalau onConflictDoNothing mem-pasifkan insert (slug keburu dipakai), ambil yang sudah ada
+      const [existing] = await this.db
+        .select()
+        .from(articleCategories)
+        .where(eq(articleCategories.slug, slug))
+        .limit(1);
 
-    return existing!;
+      return existing!;
+    } catch (error) {
+      throw new InternalServerErrorException(error);
+    }
+  }
+
+  async updateCategory(
+    actingUser: { id: number; role?: string },
+    categoryId: number,
+    dto: UpdateCategoryDto,
+  ) {
+    try {
+      this.assertWriter(actingUser.role);
+
+      const slug = await this.makeUniqueCategorySlug(dto.name);
+
+      const [row] = await this.db
+        .update(articleCategories)
+        .set({ name: dto.name, slug })
+        .where(eq(articleCategories.id, categoryId))
+        .returning();
+
+      if (row) return row;
+
+      // kalau tidak ada yang diupdate, ambil yang sudah ada
+      const [existing] = await this.db
+        .select()
+        .from(articleCategories)
+        .where(eq(articleCategories.id, categoryId))
+        .limit(1);
+
+      return existing!;
+    } catch (error) {
+      throw new InternalServerErrorException(error);
+    }
+  }
+
+  async deleteCategory(
+    actingUser: { id: number; role?: string },
+    categoryId: number,
+  ) {
+    try {
+      this.assertWriter(actingUser.role);
+
+      const [row] = await this.db
+        .delete(articleCategories)
+        .where(eq(articleCategories.id, categoryId))
+        .returning();
+
+      if (row) return row;
+
+      // kalau tidak ada yang dihapus, ambil yang sudah ada
+      const [existing] = await this.db
+        .select()
+        .from(articleCategories)
+        .where(eq(articleCategories.id, categoryId))
+        .limit(1);
+
+      return existing!;
+    } catch (error) {
+      throw new InternalServerErrorException(error);
+    }
   }
 
   // List categories (public)
@@ -462,70 +746,384 @@ export class ArticlesService {
 
   // ================================ End Filter ====================================== //
 
-  async create(
-    actingUser: { id: number; role?: string },
+  // === CREATE + optional cover (file atau url) ===
+  async createWithOptionalCover(
+    acting: { id: number; role?: string },
     dto: CreateArticleDto,
+    coverFile?: Express.Multer.File,
   ) {
-    this.assertWriter(actingUser.role);
+    this.assertWriter(acting.role);
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
 
-    const baseSlug = dto.slug
-      ? this.slugify(dto.slug)
-      : this.slugify(dto.title);
-    const slug = await this.ensureUniqueSlug(baseSlug);
+    const slug = await this.makeUniqueArticleSlug(dto.title.trim());
+    const status =
+      dto.status === 'published' || dto.status === 'draft'
+        ? dto.status
+        : 'draft';
+    const catSlugs = this.parseCategorySlugs(dto.categories);
 
-    const [row] = await this.db
-      .insert(articles)
-      .values({
-        title: dto.title,
-        summary: dto.summary,
-        content: dto.content,
-        slug,
-        status: 'draft',
-        createdBy: actingUser.id,
-        updatedBy: actingUser.id,
-      })
-      .returning();
+    return this.db.transaction(async (tx) => {
+      // 1) insert article
+      const now = new Date();
+      const [art] = await tx
+        .insert(articles)
+        .values({
+          title: dto.title!.trim(),
+          slug,
+          summary: dto.summary ?? null,
+          content: dto.content ?? null,
+          status,
+          publishedAt: status === 'published' ? now : null,
+          createdBy: acting.id,
+          updatedBy: acting.id,
+          updatedAt: now,
+        })
+        .returning();
 
-    return row;
+      // 2) optional categories
+      if (catSlugs.length) {
+        await this.linkArticleCategories(tx, art.id, catSlugs);
+      }
+
+      // 3) optional cover (file OR url)
+      let coverId: number | null = null;
+
+      if (coverFile) {
+        const { url, storageKey } = this.toPublicFromFile(coverFile);
+        const [img] = await tx
+          .insert(articleImages)
+          .values({
+            articleId: art.id,
+            url,
+            storageKey, // "uploads/.."
+            alt: dto.coverAlt ?? null,
+            isCover: true,
+            position: 0,
+          })
+          .returning();
+        coverId = img.id;
+      } else if (dto.coverUrl) {
+        const isLocal = dto.coverUrl.startsWith('/uploads/');
+        const storageKey = isLocal ? this.urlToStorageKey(dto.coverUrl) : null;
+
+        const [img] = await tx
+          .insert(articleImages)
+          .values({
+            articleId: art.id,
+            url: dto.coverUrl, // "/uploads/..." atau URL eksternal
+            storageKey, // "uploads/..." atau null
+            alt: dto.coverAlt ?? null,
+            isCover: true,
+            position: 0,
+          })
+          .returning();
+        coverId = img.id;
+      }
+
+      if (coverId) {
+        await tx
+          .update(articles)
+          .set({ coverImageId: coverId, updatedAt: new Date() })
+          .where(eq(articles.id, art.id));
+      }
+
+      return { ...art, coverImageId: coverId };
+    });
   }
-
-  async update(
-    actingUser: { id: number; role?: string },
-    id: number,
+  async updateWithOptionalCover(
+    acting: { id: number; role?: string },
+    articleId: number,
     dto: UpdateArticleDto,
+    coverFile?: Express.Multer.File,
   ) {
-    this.assertWriter(actingUser.role);
+    this.assertWriter(acting.role);
 
-    const [existing] = await this.db
+    const [current] = await this.db
       .select()
       .from(articles)
-      .where(eq(articles.id, id));
-    if (!existing) throw new NotFoundException('Article not found');
+      .where(eq(articles.id, articleId))
+      .limit(1);
+    if (!current) throw new NotFoundException('Article not found');
 
-    let slug = existing.slug;
-    if (dto.slug) {
-      const base = this.slugify(dto.slug);
-      slug = await this.ensureUniqueSlug(base, id);
-    } else if (dto.title && !existing.publishedAt) {
-      // allow update slug from title when still draft
-      const base = this.slugify(dto.title);
-      slug = await this.ensureUniqueSlug(base, id);
+    const now = new Date();
+
+    // --- siapkan patch artikel ---
+    const patch: Partial<ArticleRow> = { updatedBy: acting.id, updatedAt: now };
+    let newSlug: string | undefined;
+
+    if (dto.title && dto.title.trim() && dto.title.trim() !== current.title) {
+      patch.title = dto.title.trim();
+      newSlug = await this.makeUniqueArticleSlug(dto.title.trim());
+      patch.slug = newSlug;
+    }
+    if (dto.summary !== undefined) patch.summary = dto.summary ?? null;
+    if (dto.content !== undefined) patch.content = dto.content ?? null;
+
+    if (dto.status === 'published' && current.status !== 'published') {
+      patch.status = 'published' as any;
+      patch.publishedAt = now;
+    } else if (dto.status === 'draft' && current.status !== 'draft') {
+      patch.status = 'draft' as any;
+      patch.publishedAt = null;
     }
 
-    const [row] = await this.db
-      .update(articles)
-      .set({
-        title: dto.title ?? existing.title,
-        summary: dto.summary ?? existing.summary,
-        content: dto.content ?? existing.content,
-        slug,
-        updatedBy: actingUser.id,
-        updatedAt: new Date(),
-      })
-      .where(eq(articles.id, id))
-      .returning();
+    const catSlugs =
+      dto.categories !== undefined
+        ? this.parseCategorySlugs(dto.categories)
+        : null;
 
-    return row;
+    // --- hitung gambar inline yang dihapus bila content diupdate ---
+    const removedInlineUrls: string[] =
+      dto.content !== undefined
+        ? (() => {
+            const before = new Set(
+              this.extractInlineImageUrls(current.content),
+            );
+            const after = new Set(
+              this.extractInlineImageUrls(dto.content ?? ''),
+            );
+            const lost: string[] = [];
+            for (const u of before) if (!after.has(u)) lost.push(u);
+            return lost;
+          })()
+        : [];
+
+    // --- file yang perlu dihapus SETELAH commit (storageKey: 'uploads/...') ---
+    const filesToDelete: string[] = [];
+
+    const updated = await this.db.transaction(async (tx) => {
+      // 1) update artikel
+      if (Object.keys(patch).length > 2 /* updatedBy, updatedAt always set */) {
+        await tx.update(articles).set(patch).where(eq(articles.id, articleId));
+      }
+
+      // 2) categories (replace-all) jika dikirim
+      if (catSlugs) {
+        await this.replaceArticleCategories(tx as any, articleId, catSlugs);
+      }
+
+      // util: set cover id baru
+      const setCoverId = async (imgId: number) => {
+        await tx
+          .update(articleImages)
+          .set({ isCover: true })
+          .where(eq(articleImages.id, imgId));
+        await tx
+          .update(articles)
+          .set({ coverImageId: imgId, updatedAt: new Date() })
+          .where(eq(articles.id, articleId));
+      };
+
+      // ambil cover sebelumnya (jika ada)
+      const [prevCover] = current.coverImageId
+        ? await tx
+            .select()
+            .from(articleImages)
+            .where(eq(articleImages.id, current.coverImageId))
+            .limit(1)
+        : [];
+
+      // 3) remove cover?
+      if (dto.removeCover) {
+        await tx
+          .update(articles)
+          .set({ coverImageId: null, updatedAt: new Date() })
+          .where(eq(articles.id, articleId));
+
+        await tx
+          .update(articleImages)
+          .set({ isCover: false })
+          .where(eq(articleImages.articleId, articleId));
+
+        if (prevCover) {
+          await tx
+            .delete(articleImages)
+            .where(eq(articleImages.id, prevCover.id));
+          if (prevCover.storageKey) filesToDelete.push(prevCover.storageKey);
+        }
+      }
+
+      // 4) cover via file upload
+      if (coverFile) {
+        const { url, storageKey } = this.toPublicFromFile(coverFile);
+        const [img] = await (tx as any)
+          .insert(articleImages)
+          .values({
+            articleId,
+            url,
+            storageKey,
+            alt: dto.coverAlt ?? null,
+            isCover: true,
+            position: 0,
+          })
+          .returning();
+        await setCoverId(img.id);
+
+        // Auto-hapus cover lama ketika diganti
+        if (prevCover) {
+          await tx
+            .delete(articleImages)
+            .where(eq(articleImages.id, prevCover.id));
+          if (prevCover.storageKey) filesToDelete.push(prevCover.storageKey);
+        }
+      }
+
+      // 5) cover via URL
+      if (!coverFile && dto.coverUrl) {
+        const isLocal = dto.coverUrl.startsWith('/uploads/');
+        const storageKey = isLocal ? this.urlToStorageKey(dto.coverUrl) : null;
+
+        const [img] = await (tx as any)
+          .insert(articleImages)
+          .values({
+            articleId,
+            url: dto.coverUrl,
+            storageKey,
+            alt: dto.coverAlt ?? null,
+            isCover: true,
+            position: 0,
+          })
+          .returning();
+        await setCoverId(img.id);
+
+        if (prevCover) {
+          await tx
+            .delete(articleImages)
+            .where(eq(articleImages.id, prevCover.id));
+          if (prevCover.storageKey) filesToDelete.push(prevCover.storageKey);
+        }
+      }
+
+      // 6) cover via existing imageId
+      if (!coverFile && !dto.coverUrl && dto.coverImageId) {
+        const [img] = await tx
+          .select()
+          .from(articleImages)
+          .where(
+            and(
+              eq(articleImages.id, dto.coverImageId),
+              eq(articleImages.articleId, articleId),
+            ),
+          )
+          .limit(1);
+        if (!img)
+          throw new BadRequestException(
+            'coverImageId not found on this article',
+          );
+
+        await setCoverId(img.id);
+
+        if (prevCover && prevCover.id !== img.id) {
+          await tx
+            .delete(articleImages)
+            .where(eq(articleImages.id, prevCover.id));
+          if (prevCover.storageKey) filesToDelete.push(prevCover.storageKey);
+        }
+      }
+
+      // 7) inline images yang dihapus dari content:
+      if (removedInlineUrls.length) {
+        await tx
+          .delete(articleImages)
+          .where(
+            and(
+              eq(articleImages.articleId, articleId),
+              inArray(articleImages.url, removedInlineUrls),
+            ),
+          );
+        for (const url of removedInlineUrls) {
+          const key = this.urlToStorageKey(url); // -> "uploads/..."
+          if (key) filesToDelete.push(key);
+        }
+      }
+
+      const [row] = await tx
+        .select()
+        .from(articles)
+        .where(eq(articles.id, articleId))
+        .limit(1);
+      return row;
+    });
+
+    // --- setelah transaksi sukses: hapus file di filesystem (silent) ---
+    for (const key of Array.from(new Set(filesToDelete))) {
+      try {
+        const url = '/' + key.replace(/\\/g, '/');
+        const [{ c }] = await this.db
+          .select({ c: sql<number>`count(*)::int` })
+          .from(articles)
+          .where(
+            and(
+              ne(articles.id, articleId),
+              sql`position(${url} in ${articles.content}) > 0`,
+            ),
+          );
+
+        if (c === 0) {
+          await fs.unlink(join(process.cwd(), key)).catch(() => {});
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return updated;
+  }
+
+  // === DELETE ===
+  async deleteArticle(
+    acting: { id: number; role?: string },
+    articleId: number,
+  ) {
+    this.assertWriter(acting.role);
+
+    // pastikan artikel ada
+    const [exists] = await this.db
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.id, articleId))
+      .limit(1);
+    if (!exists) throw new NotFoundException('Article not found');
+
+    // ambil semua image milik artikel (cover & inline) SEBELUM delete,
+    // supaya masih bisa baca storageKey-nya.
+    const imgs = await this.db
+      .select({
+        id: articleImages.id,
+        storageKey: articleImages.storageKey, // nullable
+      })
+      .from(articleImages)
+      .where(eq(articleImages.articleId, articleId));
+
+    // kumpulkan path file yang perlu dihapus (non-null), dedupe
+    const filesToDelete = Array.from(
+      new Set(
+        imgs
+          .map((i) => i.storageKey)
+          .filter((p): p is string => typeof p === 'string' && p.length > 0),
+      ),
+    );
+
+    // transaksi: hapus artikel (FK cascade akan menghapus images & links bila sudah diset).
+    await this.db.transaction(async (tx) => {
+      // Kalau DI DB kamu belum set ON DELETE CASCADE untuk tabel relasi,
+      // uncomment baris ini supaya bersih:
+      // await tx.delete(articleCategoryLinks).where(eq(articleCategoryLinks.articleId, articleId));
+      // await tx.delete(articleImages).where(eq(articleImages.articleId, articleId));
+
+      await tx.delete(articles).where(eq(articles.id, articleId));
+    });
+
+    // setelah commit, hapus file fisik di disk (silent error)
+    await Promise.all(
+      filesToDelete.map((path) =>
+        fs.unlink(path).catch(() => {
+          // ignore error (mis. file sudah tidak ada)
+        }),
+      ),
+    );
+
+    return { ok: true, id: articleId, deletedFiles: filesToDelete.length };
   }
 
   async publish(actingUser: { id: number; role?: string }, id: number) {
@@ -743,38 +1341,8 @@ export class ArticlesService {
     return { ok: true };
   }
 
-  async uploadEditorImage(
-    actingUser: { id: number; role?: string },
-    articleId: number,
-    file: { url: string; storageKey?: string },
-    opts?: { alt?: string; position?: number },
-  ) {
-    // Hanya ADMIN/SUPPORT yang boleh
-    if (actingUser.role !== 'ADMIN' && actingUser.role !== 'SUPPORT') {
-      throw new ForbiddenException('Only ADMIN or SUPPORT can upload images');
-    }
-
-    // Pastikan artikel ada
-    const [art] = await this.db
-      .select({ id: articles.id })
-      .from(articles)
-      .where(eq(articles.id, articleId));
-    if (!art) throw new NotFoundException('Article not found');
-
-    // Simpan image (bukan cover)
-    const [img] = await this.db
-      .insert(articleImages)
-      .values({
-        articleId,
-        url: file.url,
-        storageKey: file.storageKey,
-        alt: opts?.alt,
-        isCover: false,
-        position: opts?.position ?? 0,
-      })
-      .returning();
-
-    // CKEditor SimpleUpload minimal butuh { url }
-    return { url: file.url, image: img };
+  async editorUpload(file: Express.Multer.File) {
+    const { url, storageKey } = this.fileToPublic(file);
+    return { url, storageKey };
   }
 }

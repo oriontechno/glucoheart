@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { users } from '../db/schema';
-import * as argon2 from 'argon2';
 import { and, asc, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -31,14 +30,17 @@ export class UsersService {
     const [u] = await this.db
       .select({
         id: users.id,
-        passwordHash: (users as any).passwordHash,
-        updatedAt: (users as any).updatedAt,
+        passwordHash: users.password, // <- alias dari kolom 'password'
+        updatedAt: users.updatedAt, // <- kolom ada di schema
       })
-      .from(users as any)
-      .where(eq(users.id as any, userId));
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
     if (!u) throw new NotFoundException('User not found');
-    if (!u.passwordHash)
+    if (!u.passwordHash) {
       throw new BadRequestException('Password is not set for this user');
+    }
     return u.passwordHash as string;
   }
 
@@ -212,7 +214,10 @@ export class UsersService {
     return user;
   }
 
-  async changePassword(actingUser: { id: number }, dto: ChangePasswordDto) {
+  async changePassword(
+    actingUser: { id: number },
+    dto: { currentPassword: string; newPassword: string },
+  ) {
     if (dto.newPassword === dto.currentPassword) {
       throw new BadRequestException(
         'Password baru tidak boleh sama dengan password lama',
@@ -220,26 +225,34 @@ export class UsersService {
     }
 
     const issues = validatePasswordStrength(dto.newPassword);
-    if (issues.length)
+    if (issues.length) {
       throw new BadRequestException('Password lemah: ' + issues.join(', '));
+    }
 
+    // ambil hash sekarang dari DB
     const currentHash = await this.getUserPasswordHash(actingUser.id);
-    const ok = await argon2.verify(currentHash, dto.currentPassword);
-    if (!ok) throw new ForbiddenException('Password saat ini salah');
 
-    const newHash = await argon2.hash(dto.newPassword, {
-      type: argon2.argon2id,
-    });
+    // ✅ urutan benar: compare(plain, hash)
+    const ok = await bcrypt.compare(dto.currentPassword, currentHash);
+    if (!ok) {
+      throw new ForbiddenException('Password saat ini salah');
+    }
+
+    const newHash = await bcrypt.hash(dto.newPassword, 10);
+
     try {
       await this.db
-        .update(users as any)
-        .set({ passwordHash: newHash, passwordUpdatedAt: new Date() } as any)
-        .where(eq(users.id as any, actingUser.id));
+        .update(users)
+        .set({
+          password: newHash, // ✅ kolom sesuai schema
+          updatedAt: new Date(), // ✅ gunakan updatedAt
+        })
+        .where(eq(users.id, actingUser.id));
 
-      // Emit event for downstream (e.g., revoke sessions, notify user)
-      this.events.emit('user.password.changed', { userId: actingUser.id });
+      // Emit event downstream kalau kamu memang punya event emitter ini
+      this.events?.emit?.('user.password.changed', { userId: actingUser.id });
 
-      return { ok: true };
+      return { message: 'Password changed successfully' };
     } catch (error) {
       throw new InternalServerErrorException('Failed to change password');
     }
@@ -247,38 +260,55 @@ export class UsersService {
 
   async adminResetPassword(
     actingUser: { id: number; role?: string },
-    dto: AdminResetPasswordDto,
+    dto: { userId: number | string; newPassword: string },
   ) {
-    if (actingUser.role !== 'ADMIN')
+    // hanya ADMIN
+    if (actingUser.role !== 'ADMIN') {
       throw new ForbiddenException('Hanya admin yang boleh reset password');
+    }
 
+    // validasi userId number
+    const userId = Number(dto.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException('userId tidak valid');
+    }
+
+    // cek kekuatan password
     const issues = validatePasswordStrength(dto.newPassword);
-    if (issues.length)
+    if (issues.length) {
       throw new BadRequestException('Password lemah: ' + issues.join(', '));
+    }
 
-    // ensure user exists
+    // pastikan user ada
     const [u] = await this.db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.id, dto.userId));
+      .where(eq(users.id, userId))
+      .limit(1);
     if (!u) throw new NotFoundException('User tidak ditemukan');
 
-    const newHash = await argon2.hash(dto.newPassword, {
-      type: argon2.argon2id,
-    });
+    // hash baru
+    const newHash = await bcrypt.hash(dto.newPassword, 10);
 
     try {
       await this.db
-        .update(users as any)
-        .set({ passwordHash: newHash, passwordUpdatedAt: new Date() } as any)
-        .where(eq(users.id as any, dto.userId));
+        .update(users)
+        .set({
+          password: newHash, // ✅ kolom sesuai schema
+          updatedAt: new Date(), // ✅ kolom sesuai schema
+        })
+        .where(eq(users.id, userId));
 
-      this.events.emit('user.password.reset', {
-        userId: dto.userId,
+      // Emit event kalau ada emitter yang diinject
+      this.events?.emit?.('user.password.reset', {
+        userId,
         byAdminId: actingUser.id,
       });
-      return { ok: true };
-    } catch (error) {
+
+      return { message: 'Password reset successfully' };
+    } catch (err: any) {
+      // kalau perlu debugging:
+      // console.error('adminResetPassword error:', err?.message, err);
       throw new InternalServerErrorException('Failed to reset password');
     }
   }

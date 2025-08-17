@@ -7,13 +7,17 @@ import {
   Req,
   ParseIntPipe,
   Query,
+  Patch,
+  Delete,
 } from '@nestjs/common';
 import { DiscussionService } from './discussion.service';
 import { ZodValidation } from '../zod/zod-validation.decorator';
 import {
   createRoomSchema,
+  updateRoomSchema,
   discussionSendMessageSchema,
   type CreateRoomDto,
+  type UpdateRoomDto,
   type DiscussionSendMessageDto,
 } from './schema/discussion.schema';
 import { Request } from 'express';
@@ -66,6 +70,26 @@ export class DiscussionController {
   ) {
     const { user } = req;
     return this.svc.createRoom({ id: user.id, role: user.role }, dto);
+  }
+
+  @Patch('rooms/:roomId')
+  @ZodValidation(updateRoomSchema)
+  async updateRoom(
+    @Req() req: Request & { user: RequestUser },
+    @Param('roomId', ParseIntPipe) roomId: number,
+    @Body() dto: UpdateRoomDto,
+  ) {
+    const { user } = req;
+    return this.svc.updateRoom({ id: user.id, role: user.role }, roomId, dto);
+  }
+
+  @Delete('rooms/:roomId')
+  async deleteRoom(
+    @Req() req: Request & { user: RequestUser },
+    @Param('roomId', ParseIntPipe) roomId: number,
+  ) {
+    const { user } = req;
+    return this.svc.deleteRoom({ id: user.id, role: user.role }, roomId);
   }
 
   // List public rooms

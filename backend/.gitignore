@@ -28,3 +28,6 @@
 
 # drizzle migrations (if not committing)
 src/db/migrations/
+
+# uploads
+/uploads

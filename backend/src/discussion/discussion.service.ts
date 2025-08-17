@@ -290,28 +290,34 @@ export class DiscussionService {
       .where(eq(discussionRooms.isPublic, true))
       .orderBy(desc(discussionRooms.updatedAt));
 
-    const ids = rooms.map((r) => r.id);
-    const lastMessages = ids.length
-      ? await this.db
-          .select()
-          .from(discussionMessages)
-          .where(
-            inArray(
-              discussionMessages.id,
-              rooms.filter((r) => r.lastMessageId).map((r) => r.lastMessageId!),
-            ),
-          )
-      : [];
-    const lastMap = new Map(lastMessages.map((m) => [m.id, m] as const));
+    if (!rooms.length) return rooms.map((r) => ({ ...r, lastMessage: null }));
+
+    // ambil lastMessage lengkap dengan user
+    const lastIds = rooms.filter(r => r.lastMessageId).map(r => r.lastMessageId!);
+    const lastRows = lastIds.length ? await this.db
+      .select({
+        id: discussionMessages.id,
+        roomId: discussionMessages.roomId,
+        senderId: discussionMessages.senderId,
+        content: discussionMessages.content,
+        createdAt: discussionMessages.createdAt,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profilePicture: users.profilePicture,
+      })
+      .from(discussionMessages)
+      .leftJoin(users, eq(users.id, discussionMessages.senderId))
+      .where(inArray(discussionMessages.id, lastIds))
+    : [];
+
+    const lastMap = new Map(lastRows.map(r => [r.id, this.mapMessageRow(r)]));
 
     return rooms.map((r) => ({
       ...r,
-      lastMessage: r.lastMessageId
-        ? (lastMap.get(r.lastMessageId) ?? null)
-        : null,
+      lastMessage: r.lastMessageId ? (lastMap.get(r.lastMessageId) ?? null) : null,
     }));
   }
-
+  
   private async ensureCanPost(roomId: number, userId: number) {
     const [room] = await this.db
       .select()
@@ -346,46 +352,94 @@ export class DiscussionService {
     senderId: number,
     dto: DiscussionSendMessageDto,
   ) {
-    try {
-      await this.ensureCanPost(roomId, senderId);
-      const inserted = await this.db.transaction(async (tx) => {
-        const [msg] = await tx
-          .insert(discussionMessages)
-          .values({ roomId, senderId, content: dto.content })
-          .returning();
+    await this.ensureCanPost(roomId, senderId);
 
-        await tx
-          .update(discussionRooms)
-          .set({
-            lastMessageId: msg.id,
-            lastMessageAt: new Date(),
-            updatedAt: new Date(),
-          })
-          .where(eq(discussionRooms.id, roomId));
+    const inserted = await this.db.transaction(async (tx) => {
+      const [msg] = await tx
+        .insert(discussionMessages)
+        .values({ roomId, senderId, content: dto.content })
+        .returning();
 
-        return msg;
-      });
+      await tx
+        .update(discussionRooms)
+        .set({
+          lastMessageId: msg.id,
+          lastMessageAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(discussionRooms.id, roomId));
 
-      this.events.emit('discussion.message.created', {
-        roomId,
-        messageId: inserted.id,
-      });
-      return inserted;
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to send message');
-    }
+      return msg;
+    });
+
+    // ambil lagi lengkap dengan user untuk response + broadcast
+    const [row] = await this.db
+      .select({
+        id: discussionMessages.id,
+        roomId: discussionMessages.roomId,
+        senderId: discussionMessages.senderId,
+        content: discussionMessages.content,
+        createdAt: discussionMessages.createdAt,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profilePicture: users.profilePicture,
+      })
+      .from(discussionMessages)
+      .leftJoin(users, eq(users.id, discussionMessages.senderId))
+      .where(eq(discussionMessages.id, inserted.id))
+      .limit(1);
+
+    const payload = this.mapMessageRow(row);
+
+    // event untuk websocket/gateway (kalau ada)
+    this.events.emit('discussion.message.created', payload);
+
+    return payload;
   }
 
   async fetchMessages(roomId: number) {
-    try {
-      const rows = await this.db
-        .select()
-        .from(discussionMessages)
-        .where(eq(discussionMessages.roomId, roomId))
-        .orderBy(asc(discussionMessages.createdAt));
-      return rows;
-    } catch (error) {
-      throw new InternalServerErrorException('Failed to fetch messages');
-    }
+    const rows = await this.db
+      .select({
+        id: discussionMessages.id,
+        roomId: discussionMessages.roomId,
+        senderId: discussionMessages.senderId,
+        content: discussionMessages.content,
+        createdAt: discussionMessages.createdAt,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profilePicture: users.profilePicture,
+      })
+      .from(discussionMessages)
+      .leftJoin(users, eq(users.id, discussionMessages.senderId))
+      .where(eq(discussionMessages.roomId, roomId))
+      .orderBy(asc(discussionMessages.createdAt));
+
+    return rows.map((r) => this.mapMessageRow(r));
   }
+
+  private mapMessageRow(row: {
+    id: number;
+    roomId: number;
+    senderId: number;
+    content: string;
+    createdAt: Date;
+    firstName?: string | null;
+    lastName?: string | null;
+    profilePicture?: string | null;
+  }) {
+    const first = (row.firstName ?? '').trim();
+    const last  = (row.lastName ?? '').trim();
+    const fullName = `${first} ${last}`.trim();
+
+    return {
+      id: row.id,
+      roomId: row.roomId,
+      senderId: row.senderId,
+      content: row.content,
+      createdAt: row.createdAt,
+      senderName: fullName || undefined,         // biar frontend kebaca
+      senderAvatar: row.profilePicture || undefined,
+    };
+  }
+  
 }
