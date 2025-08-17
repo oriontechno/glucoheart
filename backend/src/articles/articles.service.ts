@@ -30,9 +30,7 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 
 import { promises as fs } from 'fs';
-import { join, relative, isAbsolute, basename } from 'path';
-
-const UPLOAD_ROOT = join(process.cwd(), 'uploads');
+import { join, relative, isAbsolute, basename, resolve } from 'path';
 
 type ImageRow = typeof articleImages.$inferSelect;
 
@@ -95,6 +93,48 @@ export class ArticlesService {
       // URL tanpa storageKey (mis. set via coverUrl) — aman hapus row
       await tx.delete(articleImages).where(eq(articleImages.id, prev.id));
     }
+  }
+
+  private readonly UPLOAD_ROOT = resolve(process.cwd(), 'uploads');
+
+  /** file.path (abs/rel) -> { url: "/uploads/..", storageKey: "uploads/.." } */
+  private toPublicFromPath(p: string) {
+    const abs = isAbsolute(p) ? p : resolve(process.cwd(), p);
+    // jadikan relatif terhadap folder uploads
+    let relToUploads = relative(this.UPLOAD_ROOT, abs).replace(/\\/g, '/'); // "articles/xxx.png"
+    if (relToUploads.startsWith('..') || relToUploads === '') {
+      // fallback jika bukan di bawah /uploads
+      relToUploads = `articles/${basename(abs)}`;
+    }
+    const storageKey = `uploads/${relToUploads}`; // "uploads/articles/xxx.png"
+    const url = `/${storageKey}`; // "/uploads/articles/xxx.png"
+    return { url, storageKey };
+  }
+
+  /** Multer file -> public/url + storageKey */
+  private toPublicFromFile(file: Express.Multer.File) {
+    return this.toPublicFromPath(file.path);
+  }
+
+  /** Ekstrak semua <img src="..."> lokal (hanya yang mulai "/uploads/") dari HTML */
+  private extractInlineImageUrls(html?: string | null): string[] {
+    if (!html) return [];
+    const out = new Set<string>();
+    const re = /<img\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html))) {
+      const raw = (m[1] || '').trim();
+      if (!raw) continue;
+      const clean = raw.split('#')[0].split('?')[0];
+      if (clean.startsWith('/uploads/')) out.add(clean);
+    }
+    return Array.from(out);
+  }
+
+  /** "/uploads/.." -> "uploads/.." (untuk fs.unlink) */
+  private urlToStorageKey(url: string): string | null {
+    if (!url || !url.startsWith('/uploads/')) return null;
+    return url.slice(1).replace(/\\/g, '/');
   }
 
   private fileToPublic(file: Express.Multer.File) {
@@ -749,23 +789,13 @@ export class ArticlesService {
       let coverId: number | null = null;
 
       if (coverFile) {
-        // === Build public URL & storageKey yang rapi ===
-        const abs = isAbsolute(coverFile.path)
-          ? coverFile.path
-          : join(process.cwd(), coverFile.path);
-        let rel = relative(process.cwd(), abs).replace(/\\/g, '/'); // ex: 'uploads/articles/xxx.jpg'
-        if (!rel.startsWith('uploads/')) {
-          rel = `uploads/articles/${basename(coverFile.path)}`;
-        }
-        const url = `/${rel}`;
-        const storageKey = rel;
-
+        const { url, storageKey } = this.toPublicFromFile(coverFile);
         const [img] = await tx
           .insert(articleImages)
           .values({
             articleId: art.id,
             url,
-            storageKey, // 'uploads/...'
+            storageKey, // "uploads/.."
             alt: dto.coverAlt ?? null,
             isCover: true,
             position: 0,
@@ -773,18 +803,15 @@ export class ArticlesService {
           .returning();
         coverId = img.id;
       } else if (dto.coverUrl) {
-        // Jika URL lokal, siapkan storageKey juga agar bisa dihapus nantinya
         const isLocal = dto.coverUrl.startsWith('/uploads/');
-        const storageKey = isLocal
-          ? dto.coverUrl.replace(/^\//, '') // '/uploads/..' -> 'uploads/...'
-          : null;
+        const storageKey = isLocal ? this.urlToStorageKey(dto.coverUrl) : null;
 
         const [img] = await tx
           .insert(articleImages)
           .values({
             articleId: art.id,
-            url: dto.coverUrl,
-            storageKey,
+            url: dto.coverUrl, // "/uploads/..." atau URL eksternal
+            storageKey, // "uploads/..." atau null
             alt: dto.coverAlt ?? null,
             isCover: true,
             position: 0,
@@ -803,26 +830,6 @@ export class ArticlesService {
       return { ...art, coverImageId: coverId };
     });
   }
-
-  // --- helpers ---
-  private extractInlineImageUrls(html?: string | null): string[] {
-    if (!html) return [];
-    const urls = new Set<string>();
-    const re = /<img[^>]+src=["']([^"']+)["']/gi;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(html))) {
-      const raw = (m[1] || '').split('?')[0]; // buang query string
-      if (raw.startsWith('/uploads/')) urls.add(raw);
-    }
-    return Array.from(urls);
-  }
-  private urlToStorageKey(url: string): string | null {
-    // kita hanya kelola file lokal yang ada di bawah /uploads
-    if (!url.startsWith('/uploads/')) return null;
-    // untuk penyimpanan lokal kita simpan path relatif 'uploads/...'
-    return url.replace(/^\//, ''); // '/uploads/..' -> 'uploads/...'
-  }
-
   async updateWithOptionalCover(
     acting: { id: number; role?: string },
     articleId: number,
@@ -938,17 +945,7 @@ export class ArticlesService {
 
       // 4) cover via file upload
       if (coverFile) {
-        // === Build public URL & storageKey yang rapi ===
-        const abs = isAbsolute(coverFile.path)
-          ? coverFile.path
-          : join(process.cwd(), coverFile.path);
-        let rel = relative(process.cwd(), abs).replace(/\\/g, '/');
-        if (!rel.startsWith('uploads/')) {
-          rel = `uploads/articles/${basename(coverFile.path)}`;
-        }
-        const url = `/${rel}`;
-        const storageKey = rel;
-
+        const { url, storageKey } = this.toPublicFromFile(coverFile);
         const [img] = await (tx as any)
           .insert(articleImages)
           .values({
@@ -974,7 +971,7 @@ export class ArticlesService {
       // 5) cover via URL
       if (!coverFile && dto.coverUrl) {
         const isLocal = dto.coverUrl.startsWith('/uploads/');
-        const storageKey = isLocal ? dto.coverUrl.replace(/^\//, '') : null;
+        const storageKey = isLocal ? this.urlToStorageKey(dto.coverUrl) : null;
 
         const [img] = await (tx as any)
           .insert(articleImages)
@@ -1035,7 +1032,7 @@ export class ArticlesService {
             ),
           );
         for (const url of removedInlineUrls) {
-          const key = this.urlToStorageKey(url); // -> 'uploads/...'
+          const key = this.urlToStorageKey(url); // -> "uploads/..."
           if (key) filesToDelete.push(key);
         }
       }
@@ -1063,8 +1060,7 @@ export class ArticlesService {
           );
 
         if (c === 0) {
-          const abs = join(process.cwd(), key); // 🔧 pastikan absolut sebelum unlink
-          await fs.unlink(abs).catch(() => {});
+          await fs.unlink(join(process.cwd(), key)).catch(() => {});
         }
       } catch {
         // ignore
