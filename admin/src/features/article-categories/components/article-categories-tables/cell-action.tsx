@@ -25,9 +25,12 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
   const onConfirm = async () => {
     try {
-      // await articleCategoriesService.delete(data.id);
+      await articleCategoriesService.delete(data.id);
       router.refresh();
-    } catch (error) {}
+    } catch (error) {
+    } finally {
+      setOpen(false);
+    }
   };
 
   return (

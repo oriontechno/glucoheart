@@ -4,6 +4,7 @@ import {
 } from '@/constants/mock-api/article-categories';
 import { notFound } from 'next/navigation';
 import ArticleCategoriesForm from './article-categories-form';
+import { articleCategoriesService } from '@/lib/api/article-categories.service';
 
 type TArticleCategoryViewPageProps = {
   articleCategoryId: number | string;
@@ -17,7 +18,7 @@ export default async function ArticleCategoriesViewPage({
 
   if (articleCategoryId !== 'new') {
     try {
-      const data = await fakeArticleCategories.getArticleCategoryById(
+      const data = await articleCategoriesService.getArticleCategoryById(
         Number(articleCategoryId)
       );
 
