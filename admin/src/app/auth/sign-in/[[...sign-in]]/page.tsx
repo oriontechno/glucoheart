@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function Page() {
-  return <div>Sign In page (no authentication required)</div>;
+  return <SignInViewPage />;
 }

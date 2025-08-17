@@ -19,9 +19,14 @@ async function bootstrap() {
   // Expose folder "uploads" di URL /uploads
   const uploadsDir = join(process.cwd(), 'uploads');
   app.use('/uploads', express.static(uploadsDir));
+  // Enable CORS for HTTP requests
+  app.enableCors({
+    origin: '*', 
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+  });
 
   await app.listen(process.env.PORT ?? 3000);
-  console.log(`🚀 API: http://0.0.0.0:${process.env.PORT ?? 3000}`);
   console.log(`📦 Static: /uploads -> ${uploadsDir}`);
 }
 bootstrap();

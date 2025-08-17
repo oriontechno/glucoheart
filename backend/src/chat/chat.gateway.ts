@@ -1,3 +1,4 @@
+// src/chat/chat.gateway.ts
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -13,7 +14,7 @@ import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { and, eq } from 'drizzle-orm';
-import { chatSessionParticipants, messages } from '../db/schema';
+import { chatSessionParticipants } from '../db/schema';
 import { ChatService } from './chat.service';
 
 interface AuthedSocket extends Socket {
@@ -39,7 +40,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
    */
   async handleConnection(socket: AuthedSocket) {
     try {
-      // Expect JWT from one of: auth.token, Authorization: Bearer <token>, or query.token
       const auth = socket.handshake.auth as any;
       const headers = socket.handshake.headers as any;
       const query = socket.handshake.query as any;
@@ -50,7 +50,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const token = auth?.token || bearer || query?.token;
 
       if (!token) {
-        this.logger.warn(`Disconnecting unauthenticated socket: ${socket.id}`);
         socket.emit('error', 'Unauthorized');
         socket.disconnect(true);
         return;
@@ -59,7 +58,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const payload: any = await this.jwt.verifyAsync(token);
       const userId = Number(payload?.userId ?? payload?.id ?? payload?.sub);
       if (!userId || Number.isNaN(userId)) {
-        this.logger.warn(`Invalid JWT payload on socket ${socket.id}`);
         socket.emit('error', 'Unauthorized');
         socket.disconnect(true);
         return;
@@ -89,7 +87,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!payload?.sessionId || Number.isNaN(Number(payload.sessionId)))
       return { ok: false, error: 'invalid sessionId' };
 
-    // Ensure membership
     const [p] = await this.db
       .select()
       .from(chatSessionParticipants)
@@ -130,23 +127,16 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const msg = await this.chat.sendMessage(payload.sessionId, userId, {
       content: payload.content,
     });
-    // ChatService emits 'chat.message.created' and Gateway will broadcast below
+
+    // ChatService sudah emit event, tapi boleh juga balas langsung ke pengirim
     return { ok: true, message: msg };
   }
 
-  // Broadcast freshly created message to room subscribers
+  /** TANGKAP EVENT DAN BROADCAST payload lengkap */
   @OnEvent('chat.message.created')
-  async handleMessageCreated(payload: {
-    sessionId: number;
-    messageId: number;
-  }) {
+  async handleMessageCreated(payload: { sessionId: number; message: any }) {
     try {
-      const [m] = await this.db
-        .select()
-        .from(messages)
-        .where(eq(messages.id, payload.messageId));
-      if (!m) return;
-      this.io.to(`session:${payload.sessionId}`).emit('message.new', m);
+      this.io.to(`session:${payload.sessionId}`).emit('message.new', payload.message);
     } catch (e) {
       this.logger.error(`handleMessageCreated error: ${e}`);
     }
@@ -156,9 +146,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @OnEvent('chat.nurse.assigned')
   async handleNurseAssigned(payload: { sessionId: number; nurseId: number }) {
     try {
-      this.io
-        .to(`session:${payload.sessionId}`)
-        .emit('session.nurseAssigned', payload);
+      this.io.to(`session:${payload.sessionId}`).emit('session.nurseAssigned', payload);
     } catch (e) {
       this.logger.error(`handleNurseAssigned error: ${e}`);
     }
