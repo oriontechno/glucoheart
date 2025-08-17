@@ -256,6 +256,7 @@ export class ArticlesController {
   @Post('editor/upload')
   @UseInterceptors(FileInterceptor('file', multerImageOptions))
   async editorUpload(@UploadedFile() file?: Express.Multer.File) {
+    console.log(`Editor upload file:`, file);
     if (!file) throw new BadRequestException('file is required');
     return this.svc.editorUpload(file);
   }

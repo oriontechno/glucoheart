@@ -30,6 +30,9 @@ import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 
 import { promises as fs } from 'fs';
+import { join, relative, isAbsolute, basename } from 'path';
+
+const UPLOAD_ROOT = join(process.cwd(), 'uploads');
 
 type ImageRow = typeof articleImages.$inferSelect;
 
@@ -94,6 +97,33 @@ export class ArticlesService {
     }
   }
 
+  private fileToPublic(file: Express.Multer.File) {
+    // Pastikan path absolut → relatif dari project root
+    const abs = isAbsolute(file.path)
+      ? file.path
+      : join(process.cwd(), file.path);
+    let rel = relative(process.cwd(), abs).replace(/\\/g, '/'); // ex: 'uploads/articles/xxx.jpg'
+
+    // Paksa berada di bawah 'uploads/'
+    if (!rel.startsWith('uploads/')) {
+      const idx = rel.indexOf('uploads/');
+      rel = idx >= 0 ? rel.slice(idx) : `uploads/articles/${file.filename}`;
+    }
+
+    const url = `/${rel}`; // ex: '/uploads/articles/xxx.jpg'
+    const storageKey = rel; // ex: 'uploads/articles/xxx.jpg'
+    return { url, storageKey };
+  }
+
+  private async deleteByStorageKey(storageKey: string) {
+    try {
+      const abs = join(process.cwd(), storageKey); // 'uploads/...'
+      await fs.unlink(abs);
+    } catch {
+      // ignore error (file mungkin sudah tidak ada)
+    }
+  }
+
   private async makeUniqueCategorySlug(baseName: string) {
     const base = this.slugify(baseName);
     // ambil semua slug yang diawali base (base, base-2, base-3, ...)
@@ -109,21 +139,6 @@ export class ArticlesService {
     let i = 2;
     while (used.has(`${base}-${i}`)) i++;
     return `${base}-${i}`;
-  }
-
-  private async ensureUniqueSlug(base: string, articleId?: number) {
-    let attempt = 0;
-    while (attempt < 50) {
-      const slug = attempt === 0 ? base : `${base}-${attempt + 1}`;
-      const existing = await this.db
-        .select({ id: articles.id })
-        .from(articles)
-        .where(eq(articles.slug, slug));
-      if (existing.length === 0 || (articleId && existing[0].id === articleId))
-        return slug;
-      attempt++;
-    }
-    throw new BadRequestException('Unable to generate unique slug');
   }
 
   // --- helpers ---
@@ -732,14 +747,25 @@ export class ArticlesService {
 
       // 3) optional cover (file OR url)
       let coverId: number | null = null;
+
       if (coverFile) {
-        const publicUrl = this.toPublicUrlFromFile(coverFile);
+        // === Build public URL & storageKey yang rapi ===
+        const abs = isAbsolute(coverFile.path)
+          ? coverFile.path
+          : join(process.cwd(), coverFile.path);
+        let rel = relative(process.cwd(), abs).replace(/\\/g, '/'); // ex: 'uploads/articles/xxx.jpg'
+        if (!rel.startsWith('uploads/')) {
+          rel = `uploads/articles/${basename(coverFile.path)}`;
+        }
+        const url = `/${rel}`;
+        const storageKey = rel;
+
         const [img] = await tx
           .insert(articleImages)
           .values({
             articleId: art.id,
-            url: publicUrl,
-            storageKey: coverFile.path, // simpan key file untuk delete nanti
+            url,
+            storageKey, // 'uploads/...'
             alt: dto.coverAlt ?? null,
             isCover: true,
             position: 0,
@@ -747,13 +773,18 @@ export class ArticlesService {
           .returning();
         coverId = img.id;
       } else if (dto.coverUrl) {
-        // jika kamu ingin dukung set cover dari URL (mis. hasil upload editor)
+        // Jika URL lokal, siapkan storageKey juga agar bisa dihapus nantinya
+        const isLocal = dto.coverUrl.startsWith('/uploads/');
+        const storageKey = isLocal
+          ? dto.coverUrl.replace(/^\//, '') // '/uploads/..' -> 'uploads/...'
+          : null;
+
         const [img] = await tx
           .insert(articleImages)
           .values({
             articleId: art.id,
             url: dto.coverUrl,
-            storageKey: null, // kita tidak punya file lokalnya
+            storageKey,
             alt: dto.coverAlt ?? null,
             isCover: true,
             position: 0,
@@ -850,11 +881,11 @@ export class ArticlesService {
           })()
         : [];
 
-    // --- file yang perlu dihapus SETELAH commit ---
+    // --- file yang perlu dihapus SETELAH commit (storageKey: 'uploads/...') ---
     const filesToDelete: string[] = [];
 
     const updated = await this.db.transaction(async (tx) => {
-      // 1) update artikel (jika ada perubahan berarti)
+      // 1) update artikel
       if (Object.keys(patch).length > 2 /* updatedBy, updatedAt always set */) {
         await tx.update(articles).set(patch).where(eq(articles.id, articleId));
       }
@@ -876,7 +907,7 @@ export class ArticlesService {
           .where(eq(articles.id, articleId));
       };
 
-      // ambil cover sebelumnya (jika ada) untuk kemungkinan dihapus
+      // ambil cover sebelumnya (jika ada)
       const [prevCover] = current.coverImageId
         ? await tx
             .select()
@@ -907,13 +938,23 @@ export class ArticlesService {
 
       // 4) cover via file upload
       if (coverFile) {
-        const publicUrl = this.toPublicUrlFromFile(coverFile);
+        // === Build public URL & storageKey yang rapi ===
+        const abs = isAbsolute(coverFile.path)
+          ? coverFile.path
+          : join(process.cwd(), coverFile.path);
+        let rel = relative(process.cwd(), abs).replace(/\\/g, '/');
+        if (!rel.startsWith('uploads/')) {
+          rel = `uploads/articles/${basename(coverFile.path)}`;
+        }
+        const url = `/${rel}`;
+        const storageKey = rel;
+
         const [img] = await (tx as any)
           .insert(articleImages)
           .values({
             articleId,
-            url: publicUrl,
-            storageKey: coverFile.path,
+            url,
+            storageKey,
             alt: dto.coverAlt ?? null,
             isCover: true,
             position: 0,
@@ -921,7 +962,7 @@ export class ArticlesService {
           .returning();
         await setCoverId(img.id);
 
-        // Auto-hapus cover lama ketika diganti (aman karena cover tidak dipakai di konten secara sistem)
+        // Auto-hapus cover lama ketika diganti
         if (prevCover) {
           await tx
             .delete(articleImages)
@@ -932,12 +973,15 @@ export class ArticlesService {
 
       // 5) cover via URL
       if (!coverFile && dto.coverUrl) {
+        const isLocal = dto.coverUrl.startsWith('/uploads/');
+        const storageKey = isLocal ? dto.coverUrl.replace(/^\//, '') : null;
+
         const [img] = await (tx as any)
           .insert(articleImages)
           .values({
             articleId,
             url: dto.coverUrl,
-            storageKey: null,
+            storageKey,
             alt: dto.coverAlt ?? null,
             isCover: true,
             position: 0,
@@ -980,9 +1024,8 @@ export class ArticlesService {
         }
       }
 
-      // 7) jika ada inline images yang dihapus dari content:
+      // 7) inline images yang dihapus dari content:
       if (removedInlineUrls.length) {
-        // hapus link di article_images (jika ada record untuk URL tersebut)
         await tx
           .delete(articleImages)
           .where(
@@ -991,9 +1034,8 @@ export class ArticlesService {
               inArray(articleImages.url, removedInlineUrls),
             ),
           );
-        // kumpulkan storageKey (mapping dari URL) untuk dihapus setelah commit
         for (const url of removedInlineUrls) {
-          const key = this.urlToStorageKey(url);
+          const key = this.urlToStorageKey(url); // -> 'uploads/...'
           if (key) filesToDelete.push(key);
         }
       }
@@ -1007,27 +1049,25 @@ export class ArticlesService {
     });
 
     // --- setelah transaksi sukses: hapus file di filesystem (silent) ---
-    // Hindari hapus file jika masih dipakai artikel lain (cek kasar di DB).
     for (const key of Array.from(new Set(filesToDelete))) {
       try {
-        const url = '/' + key.replace(/\\/g, '/'); // normalisasi balik ke URL untuk pencarian di content
+        const url = '/' + key.replace(/\\/g, '/');
         const [{ c }] = await this.db
           .select({ c: sql<number>`count(*)::int` })
           .from(articles)
           .where(
             and(
               ne(articles.id, articleId),
-              // cari URL muncul di content artikel lain
               sql`position(${url} in ${articles.content}) > 0`,
             ),
           );
 
         if (c === 0) {
-          await fs.unlink(key).catch(() => {});
+          const abs = join(process.cwd(), key); // 🔧 pastikan absolut sebelum unlink
+          await fs.unlink(abs).catch(() => {});
         }
-        // kalau c > 0, file masih dipakai artikel lain → jangan dihapus
       } catch {
-        // abaikan error pengecekan/hapus agar tidak mengganggu response
+        // ignore
       }
     }
 
@@ -1306,18 +1346,7 @@ export class ArticlesService {
   }
 
   async editorUpload(file: Express.Multer.File) {
-    if (!file) throw new BadRequestException('file is required');
-
-    const url = this.toPublicUrlFromFile(file);
-
-    // (opsional) bisa tambah validasi mime/size di sini
-    if (!file.mimetype.startsWith('image/'))
-      throw new BadRequestException('Only images');
-
-    return {
-      url, // dipakai CKEditor sebagai <img src="...">
-      storageKey: file.path, // simpan kalau mau dihapus saat content berubah
-      // width, height bisa ditambahkan kalau kamu pakai library image-size/sharp
-    };
+    const { url, storageKey } = this.fileToPublic(file);
+    return { url, storageKey };
   }
 }
