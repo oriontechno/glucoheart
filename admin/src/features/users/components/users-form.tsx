@@ -57,6 +57,7 @@ export default function UsersForm({
       email: z.string().email({
         message: 'Please enter a valid email address.'
       }),
+      password: z.string().optional(),
       role: z.enum(roleValues, {
         required_error: 'Please select a role.'
       })
@@ -83,7 +84,8 @@ export default function UsersForm({
     firstName: initialData?.firstName || '',
     lastName: initialData?.lastName || '',
     email: initialData?.email || '',
-    role: (initialData?.role || 'USER') as (typeof roleValues)[number]
+    role: (initialData?.role || 'USER') as (typeof roleValues)[number],
+    ...(isEditing ? { password: '' } : { password: '' }) // Always include password field
   };
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -94,17 +96,16 @@ export default function UsersForm({
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsSubmitting(true);
 
-    // Debug: Log the values being sent
-    console.log('🚀 Form values to be sent:', values);
-    console.log('📝 Is editing mode:', isEditing);
-    console.log('👤 Initial data:', initialData);
-
     try {
       if (initialData?.id) {
         // Update existing user
-        console.log('🔄 Calling updateUser with ID:', initialData.id.toString());
-        console.log('📤 Update payload:', values);
-        await usersService.updateUser(initialData.id.toString(), values);
+        // For updates, only include password if it's not empty
+        const updatePayload = { ...values };
+        if (!values.password || values.password.trim() === '') {
+          delete updatePayload.password;
+        }
+
+        await usersService.updateUser(initialData.id.toString(), updatePayload);
         toast.success('User updated successfully');
       } else {
         // Create new user - ensure password is present
@@ -113,8 +114,6 @@ export default function UsersForm({
           setIsSubmitting(false);
           return;
         }
-        console.log('➕ Calling createUser');
-        console.log('📤 Create payload:', { ...values, password: values.password });
         await usersService.createUser({
           ...values,
           password: values.password
@@ -125,9 +124,6 @@ export default function UsersForm({
       router.push('/dashboard/users');
       router.refresh();
     } catch (error: any) {
-      console.error('❌ Form submission error:', error);
-      console.error('❌ Error response:', error.response?.data);
-
       // Handle different types of errors
       if (error.response?.data?.message) {
         toast.error(error.response.data.message);
@@ -196,6 +192,34 @@ export default function UsersForm({
                       <Input
                         type='email'
                         placeholder='Enter email address'
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='password'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Password{' '}
+                      {isEditing && (
+                        <span className='text-muted-foreground'>
+                          (leave empty to keep current)
+                        </span>
+                      )}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type='password'
+                        placeholder={
+                          isEditing
+                            ? 'Enter new password (optional)'
+                            : 'Enter password'
+                        }
                         {...field}
                       />
                     </FormControl>

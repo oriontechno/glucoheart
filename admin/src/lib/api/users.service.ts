@@ -41,14 +41,14 @@ export const usersService = {
   updateUser: async (
     id: string,
     userData: {
-      firstName: string;
-      lastName: string;
-      email: string;
+      firstName?: string;
+      lastName?: string;
+      email?: string;
       password?: string;
-      role: string;
+      role?: string;
     }
   ) => {
-    const response = await api.put(`/users/${id}`, userData);
+    const response = await api.patch(`/users/${id}`, userData);
     return response.data;
   },
 
