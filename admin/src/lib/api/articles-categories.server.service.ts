@@ -21,6 +21,26 @@ export class ArticleCategoriesServerService {
     };
   }
 
+  static async getArticleCategoryById(id: number) {
+    try {
+      const authConfig = await this.getAuthenticatedRequest();
+      const response = await api.get(`/articles/categories/${id}`, authConfig);
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error('Error fetching article category:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch article category'
+      };
+    }
+  }
+
   static async getAdminArticleCategories(filters: {
     page?: number;
     limit?: number;

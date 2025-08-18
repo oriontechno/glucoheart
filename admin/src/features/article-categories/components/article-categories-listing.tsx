@@ -25,7 +25,7 @@ export default async function ArticleCategoriesListingPage({}: ArticleCategories
   const data =
     await ArticleCategoriesServerService.getAdminArticleCategories(filters);
   const totalArticleCategories = data.data.total_article_categories;
-  const ArticleCategories: ArticleCategory[] = data.data;
+  const ArticleCategories: ArticleCategory[] = data.data.categories;
 
   return (
     <ArticleCategoriesTable

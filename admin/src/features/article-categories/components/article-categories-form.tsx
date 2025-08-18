@@ -50,7 +50,14 @@ export default function ArticleCategoriesForm({
     };
 
     try {
-      const result = await articleCategoriesService.create(articleData);
+      if (initialData?.id) {
+        const result = await articleCategoriesService.update(
+          initialData.id,
+          articleData
+        );
+      } else {
+        const result = await articleCategoriesService.create(articleData);
+      }
 
       // Redirect to article categories list page
       router.push('/dashboard/article-categories');

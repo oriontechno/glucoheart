@@ -55,7 +55,6 @@ export default function ArticlesForm({
           label: category.name
         }));
 
-        console.log({ options });
         setCategoryOptions(options);
       } catch (error) {
         console.error('Error loading categories:', error);

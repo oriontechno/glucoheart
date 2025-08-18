@@ -33,6 +33,7 @@ export const articleCategoriesService = {
       const response = await api.get(`/articles/categories/${id}`);
       return response.data;
     } catch (error) {
+      console.error(error);
       toast.error('Failed to fetch article category.');
       throw new Error('Failed to fetch article category.');
     }
@@ -45,6 +46,17 @@ export const articleCategoriesService = {
     } catch (error) {
       toast.error('Failed to delete category.');
       throw new Error('Failed to delete category.');
+    }
+  },
+
+  update: async (id: number, data: { name: string }) => {
+    try {
+      const response = await api.patch(`/articles/categories/${id}`, data);
+      toast.success('Category updated successfully!');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update category.');
+      throw new Error('Failed to update category.');
     }
   }
 };
