@@ -111,32 +111,6 @@ export class ArticlesController {
     });
   }
 
-  @Get('categories')
-  async listCategories(
-    @Query('q') q?: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ) {
-    return this.svc.listCategories(
-      q,
-      Number(limit ?? 100),
-      Number(offset ?? 0),
-    );
-  }
-
-  @Post(':id/categories')
-  async setArticleCategories(
-    @Req() req: Request & { user: { id: number; role?: string } },
-    @Param('id', ParseIntPipe) id: number,
-    @Body() body: SetArticleCategoriesDto,
-  ) {
-    return this.svc.setArticleCategories(
-      { id: req.user.id, role: req.user.role },
-      id,
-      body.categories || [],
-    );
-  }
-
   // ===== Admin/Support =====
   @Post()
   // @ZodValidation(createArticleSchema)
@@ -276,16 +250,56 @@ export class ArticlesController {
     return this.svc.getPublicBySlug(slug);
   }
 
-  @Get(':id')
-  async getByIdForAdmin(
-    @Req() req: Request & { user: RequestUser },
-    @Param('id', ParseIntPipe) id: number,
+  // Categories
+  @Get('categories')
+  async getCategoriesPaged(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('sort') sort?: string, // JSON string: [{"id":"name","desc":false}]
+    @Query('ids') ids?: string,
+    @Query('slugs') slugs?: string,
   ) {
-    const { user } = req;
-    return this.svc.getByIdForAdmin({ id: user.id, role: user.role }, id);
+    const idsArr = ids
+      ? ids
+          .split('.')
+          .map((v) => Number(v))
+          .filter((n) => Number.isInteger(n) && n > 0)
+      : undefined;
+    const slugsArr = slugs ? slugs.split('.').filter(Boolean) : undefined;
+
+    return this.svc.findCategoriesPaged({
+      page: Number(page) || 1,
+      limit: Number(limit) || 10,
+      search,
+      sort,
+      ids: idsArr,
+      slugs: slugsArr,
+    });
   }
 
-  // Categories
+  @Get('categories/all')
+  async getAllCategories(
+    @Query('search') search?: string,
+    @Query('ids') ids?: string, // "1.2.3"
+    @Query('slugs') slugs?: string, // "nutrition.mental-health"
+  ) {
+    const idsArr = ids
+      ? ids
+          .split('.')
+          .map((v) => Number(v))
+          .filter((n) => Number.isInteger(n) && n > 0)
+      : undefined;
+    const slugsArr = slugs ? slugs.split('.').filter(Boolean) : undefined;
+
+    return this.svc.findCategoriesAll({ search, ids: idsArr, slugs: slugsArr });
+  }
+
+  @Get('categories/:id')
+  async getCategoryById(@Param('id', ParseIntPipe) id: number) {
+    return this.svc.getCategoryById(id);
+  }
+
   @Post('categories')
   async createCategory(
     @Req() req: Request & { user: { id: number; role?: string } },
@@ -319,5 +333,27 @@ export class ArticlesController {
       { id: req.user.id, role: req.user.role },
       id,
     );
+  }
+
+  @Post(':id/categories')
+  async setArticleCategories(
+    @Req() req: Request & { user: { id: number; role?: string } },
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: SetArticleCategoriesDto,
+  ) {
+    return this.svc.setArticleCategories(
+      { id: req.user.id, role: req.user.role },
+      id,
+      body.categories || [],
+    );
+  }
+
+  @Get(':id')
+  async getByIdForAdmin(
+    @Req() req: Request & { user: RequestUser },
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const { user } = req;
+    return this.svc.getByIdForAdmin({ id: user.id, role: user.role }, id);
   }
 }
