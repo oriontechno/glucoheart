@@ -1,3 +1,5 @@
+import { articleCategoriesService } from '@/lib/api/article-categories.service';
+import { ArticleCategoriesServerService } from '@/lib/api/articles-categories.server.service';
 import { useState, useEffect } from 'react';
 
 export interface Category {
@@ -17,24 +19,13 @@ export function useCategories() {
       try {
         setLoading(true);
         setError(null);
-        
-        // TODO: Replace with actual API call
-        // const response = await api.get('/articles/categories/all');
-        // setCategories(response.data);
-        
-        // Mock data for now
-        const mockCategories: Category[] = [
-          { id: 1, name: 'Health', slug: 'health', description: 'Health related articles' },
-          { id: 2, name: 'Nutrition', slug: 'nutrition', description: 'Nutrition and diet articles' },
-          { id: 3, name: 'Exercise', slug: 'exercise', description: 'Exercise and fitness articles' },
-          { id: 4, name: 'Mental Health', slug: 'mental-health', description: 'Mental health and wellness' },
-          { id: 5, name: 'Technology', slug: 'technology', description: 'Health technology articles' },
-          { id: 6, name: 'Research', slug: 'research', description: 'Research and studies' },
-        ];
-        
-        setCategories(mockCategories);
+
+        const response = await articleCategoriesService.getAll();
+        setCategories(response.categories);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch categories');
+        setError(
+          err instanceof Error ? err.message : 'Failed to fetch categories'
+        );
         console.error('Error fetching categories:', err);
       } finally {
         setLoading(false);

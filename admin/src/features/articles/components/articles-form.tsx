@@ -28,6 +28,8 @@ import { ACCEPTED_IMAGE_TYPES, MAX_FILE_SIZE } from '@/constants/form';
 import { useState } from 'react';
 import { Article } from '@/types/entity';
 import { useCategories } from '../hooks/use-categories';
+import { articlesService } from '@/lib/api/articles.service';
+import { useRouter } from 'next/navigation';
 
 export default function ArticlesForm({
   initialData,
@@ -42,6 +44,8 @@ export default function ArticlesForm({
 
   // Fetch categories for MultiSelect
   const { categories, loading: categoriesLoading } = useCategories();
+
+  const router = useRouter();
 
   // Dynamic schema based on available categories and existing data
   const formSchema = z.object({
@@ -126,7 +130,7 @@ export default function ArticlesForm({
     values: defaultValues
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     const formData = new FormData();
 
     // Add text fields
@@ -147,24 +151,30 @@ export default function ArticlesForm({
     }
 
     // Log the form data for debugging
-    console.log('Form submission data:');
-    console.log('Title:', values.title);
-    console.log('Summary:', values.summary);
-    console.log('Content:', values.content);
-    console.log('Status:', values.status);
-    console.log('Categories (array):', values.categories);
-    console.log('Categories (backend format):', values.categories.join('.'));
-    console.log('Cover file:', values.cover?.[0]?.name);
-    console.log('Cover URL:', values.coverUrl);
+    // console.log('Form submission data:');
+    // console.log('Title:', values.title);
+    // console.log('Summary:', values.summary);
+    // console.log('Content:', values.content);
+    // console.log('Status:', values.status);
+    // console.log('Categories (array):', values.categories);
+    // console.log('Categories (backend format):', values.categories.join('.'));
+    // console.log('Cover file:', values.cover?.[0]?.name);
+    // console.log('Cover URL:', values.coverUrl);
 
     // TODO: Implement actual API call
-    // if (initialData) {
-    //   // Update existing article
-    //   await articlesService.update(initialData.id, formData);
-    // } else {
-    //   // Create new article
-    //   await articlesService.create(formData);
-    // }
+    if (initialData?.id) {
+      // Update existing article
+      // await articlesService.update(initialData.id, formData);
+    } else {
+      try {
+        // Create new article
+        await articlesService.create(formData);
+        router.push('/dashboard/articles');
+      } catch (error) {
+      } finally {
+        form.reset();
+      }
+    }
   }
 
   return (
@@ -311,14 +321,21 @@ export default function ArticlesForm({
                   <FormLabel>Categories</FormLabel>
                   <FormControl>
                     <MultiSelect
-                      options={categories.map(cat => ({
+                      options={categories.map((cat) => ({
                         value: cat.slug,
                         label: cat.name
                       }))}
-                      value={field.value}
+                      defaultValue={field.value}
                       onValueChange={field.onChange}
-                      placeholder={categoriesLoading ? "Loading categories..." : "Select categories..."}
+                      placeholder={
+                        categoriesLoading
+                          ? 'Loading categories...'
+                          : 'Choose categories...'
+                      }
                       disabled={categoriesLoading}
+                      searchable={true}
+                      hideSelectAll={false}
+                      maxCount={3}
                     />
                   </FormControl>
                   <FormMessage />

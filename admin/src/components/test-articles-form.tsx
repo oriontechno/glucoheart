@@ -15,25 +15,21 @@ export default function TestArticlesForm() {
   };
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-2xl font-bold mb-8">Test Articles Form</h1>
-      
+    <div className='container mx-auto py-8'>
+      <h1 className='mb-8 text-2xl font-bold'>Test Articles Form</h1>
+
       {/* Test with existing data */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Edit Mode (with existing categories)</h2>
-        <ArticlesForm 
-          initialData={mockArticle}
-          pageTitle="Edit Article"
-        />
+      <div className='mb-8'>
+        <h2 className='mb-4 text-lg font-semibold'>
+          Edit Mode (with existing categories)
+        </h2>
+        <ArticlesForm initialData={mockArticle} pageTitle='Edit Article' />
       </div>
-      
+
       {/* Test without existing data */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Create Mode (empty form)</h2>
-        <ArticlesForm 
-          initialData={null}
-          pageTitle="Create Article"
-        />
+      <div className='mb-8'>
+        <h2 className='mb-4 text-lg font-semibold'>Create Mode (empty form)</h2>
+        <ArticlesForm initialData={null} pageTitle='Create Article' />
       </div>
     </div>
   );

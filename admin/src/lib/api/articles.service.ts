@@ -38,5 +38,16 @@ export const articlesService = {
     } catch (error) {
       toast.error('Failed to delete article');
     }
+  },
+
+  create: async (data: any) => {
+    try {
+      const response = await api.post('/articles', data);
+      toast.success('Article created successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to create article');
+      throw error;
+    }
   }
 };
