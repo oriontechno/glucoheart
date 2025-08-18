@@ -21,6 +21,26 @@ export class ArticlesServerService {
     };
   }
 
+  static async getById(id: number) {
+    try {
+      const authConfig = await this.getAuthenticatedRequest();
+      const response = await api.get(`/articles/${id}`, authConfig);
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      console.error('Error fetching article:', error);
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch article category'
+      };
+    }
+  }
+
   static async getAdminArticles(filters: {
     page?: number;
     limit?: number;
