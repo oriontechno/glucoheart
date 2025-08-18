@@ -9,7 +9,7 @@ import { User } from '@/types/entity';
 
 export const columns: ColumnDef<User>[] = [
   {
-    id: 'firstName',
+    id: 'search',
     accessorKey: 'firstName',
     header: ({ column }: { column: Column<User, unknown> }) => (
       <DataTableColumnHeader column={column} title='First Name' />
