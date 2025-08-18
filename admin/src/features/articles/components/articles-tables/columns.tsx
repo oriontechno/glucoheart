@@ -24,7 +24,7 @@ export const createArticleColumnsFromConfig = (
     header: 'IMAGE',
     cell: ({ row }) => {
       return (
-        <div className='relative aspect-square'>
+        <div className='relative aspect-square overflow-hidden'>
           <Image
             src={
               row.getValue('coverImageUrl')
@@ -33,7 +33,7 @@ export const createArticleColumnsFromConfig = (
             }
             alt={row.getValue('title')}
             fill
-            className='rounded-lg'
+            className='rounded-lg object-cover'
           />
         </div>
       );

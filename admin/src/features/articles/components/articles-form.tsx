@@ -30,6 +30,7 @@ import { Article } from '@/types/entity';
 import { useCategories } from '../hooks/use-categories';
 import { articlesService } from '@/lib/api/articles.service';
 import { useRouter } from 'next/navigation';
+import { config } from '@/config/env';
 
 export default function ArticlesForm({
   initialData,
@@ -39,7 +40,7 @@ export default function ArticlesForm({
   pageTitle: string;
 }) {
   const [existingImageUrl, setExistingImageUrl] = useState<string | null>(
-    initialData?.coverUrl || null
+    initialData?.coverImageUrl || null
   );
 
   // Fetch categories for MultiSelect
@@ -112,16 +113,35 @@ export default function ArticlesForm({
     status: (initialData?.status as 'draft' | 'published') || 'draft',
     categories: (() => {
       if (!initialData?.categories) return [];
-      if (typeof initialData.categories === 'string') {
-        return (initialData.categories as string).split('.').filter(Boolean); // Convert "slug1.slug2" to ["slug1", "slug2"]
-      }
+
+      // Handle backend response format: array of category objects
       if (Array.isArray(initialData.categories)) {
-        return initialData.categories as string[];
+        // Check if it's array of objects with slug property
+        if (
+          initialData.categories.length > 0 &&
+          typeof initialData.categories[0] === 'object' &&
+          'slug' in initialData.categories[0]
+        ) {
+          return initialData.categories.map((cat) => cat.slug);
+        }
+        // Check if it's array of strings (slugs)
+        if (
+          initialData.categories.length > 0 &&
+          typeof initialData.categories[0] === 'string'
+        ) {
+          return initialData.categories as unknown as string[];
+        }
       }
+
+      // Handle dot-separated string format
+      if (typeof initialData.categories === 'string') {
+        return (initialData.categories as string).split('.').filter(Boolean);
+      }
+
       return [];
     })(),
-    coverAlt: initialData?.coverAlt || '',
-    coverUrl: initialData?.coverUrl || '',
+    coverImageAlt: initialData?.coverImageAlt || '',
+    coverImageUrl: initialData?.coverImageUrl || '',
     cover: [] as File[] // FileUploader expects File[] type
   };
 
@@ -163,6 +183,13 @@ export default function ArticlesForm({
 
     // TODO: Implement actual API call
     if (initialData?.id) {
+      try {
+        await articlesService.update(initialData.id, formData);
+        router.push('/dashboard/articles');
+      } catch (error) {
+      } finally {
+        form.reset();
+      }
       // Update existing article
       // await articlesService.update(initialData.id, formData);
     } else {
@@ -208,13 +235,6 @@ export default function ArticlesForm({
                       />
                     </FormControl>
                     <FormMessage />
-                    {existingImageUrl && (
-                      <div className='mt-2'>
-                        <p className='text-muted-foreground text-sm'>
-                          Current image: {existingImageUrl}
-                        </p>
-                      </div>
-                    )}
                   </FormItem>
                 </div>
               )}

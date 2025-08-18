@@ -23,7 +23,7 @@ export type Article = {
   summary?: string;
   categories?: ArticleCategory[]; // Support both backend format (string) and frontend format (array)
   content: string;
-  coverAlt?: string;
-  coverUrl?: string;
+  coverImageAlt?: string;
+  coverImageUrl?: string;
   cover?: File; // Optional for existing articles
 };
