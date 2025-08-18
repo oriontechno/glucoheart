@@ -72,8 +72,8 @@ export default function ArticlesForm({
       .array(z.string())
       .min(1, { message: 'Please select at least one category.' })
       .default([]), // Array of category slugs
-    coverAlt: z.string().optional(),
-    coverUrl: z.string().optional(), // For URL-based cover
+    coverImageAlt: z.string().optional(),
+    coverImageUrl: z.string().optional(), // For URL-based cover
     cover: z
       .any()
       .refine(
@@ -162,8 +162,10 @@ export default function ArticlesForm({
     if (values.categories && values.categories.length > 0) {
       formData.append('categories', values.categories.join('.'));
     }
-    if (values.coverAlt) formData.append('coverAlt', values.coverAlt);
-    if (values.coverUrl) formData.append('coverUrl', values.coverUrl);
+    if (values.coverImageAlt)
+      formData.append('coverImageAlt', values.coverImageAlt);
+    if (values.coverImageUrl)
+      formData.append('coverImageUrl', values.coverImageUrl);
 
     // Add cover file if uploaded
     if (values.cover && values.cover.length > 0) {
@@ -241,20 +243,7 @@ export default function ArticlesForm({
             />
             <FormField
               control={form.control}
-              name='coverUrl'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cover Image URL (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder='Enter image URL' {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name='coverAlt'
+              name='coverImageAlt'
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Cover Image Alt Text</FormLabel>
