@@ -7,7 +7,7 @@ import { ArticleCategory } from '@/constants/mock-api';
 
 export const columns: ColumnDef<ArticleCategory>[] = [
   {
-    id: 'name',
+    id: 'search',
     accessorKey: 'name',
     header: ({ column }: { column: Column<ArticleCategory, unknown> }) => (
       <DataTableColumnHeader column={column} title='Name' />
