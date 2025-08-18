@@ -9,6 +9,7 @@ import {
 } from '@/lib/columns/article-columns';
 import Image from 'next/image';
 import { Article } from '@/types/entity';
+import { config as envConfig } from '@/config/env';
 
 // Re-export the type for convenience
 export type { ArticleColumnsConfig };
@@ -17,22 +18,27 @@ export type { ArticleColumnsConfig };
 export const createArticleColumnsFromConfig = (
   config: ArticleColumnsConfig
 ): ColumnDef<Article>[] => [
-  // {
-  //   accessorKey: 'image_url',
-  //   header: 'IMAGE',
-  //   cell: ({ row }) => {
-  //     return (
-  //       <div className='relative aspect-square'>
-  //         <Image
-  //           src={row.getValue('image_url')}
-  //           alt={row.getValue('title')}
-  //           fill
-  //           className='rounded-lg'
-  //         />
-  //       </div>
-  //     );
-  //   }
-  // },
+  {
+    id: 'coverImageUrl',
+    accessorKey: 'coverImageUrl',
+    header: 'IMAGE',
+    cell: ({ row }) => {
+      return (
+        <div className='relative aspect-square overflow-hidden'>
+          <Image
+            src={
+              row.getValue('coverImageUrl')
+                ? `${envConfig.API_URL}${row.getValue('coverImageUrl')}`
+                : 'https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg'
+            }
+            alt={row.getValue('title')}
+            fill
+            className='rounded-lg object-cover'
+          />
+        </div>
+      );
+    }
+  },
   {
     id: 'title',
     accessorKey: 'title',

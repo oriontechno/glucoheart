@@ -49,5 +49,16 @@ export const articlesService = {
       toast.error('Failed to create article');
       throw error;
     }
+  },
+
+  update: async (id: number, data: any) => {
+    try {
+      const response = await api.patch(`/articles/${id}`, data);
+      toast.success('Article updated successfully');
+      return response.data;
+    } catch (error) {
+      toast.error('Failed to update article');
+      throw error;
+    }
   }
 };

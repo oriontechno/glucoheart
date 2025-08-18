@@ -21,9 +21,9 @@ export type Article = {
   slug: string;
   status: 'published' | 'draft'; // bisa pakai union biar ketat
   summary?: string;
-  categories?: string | string[]; // Support both backend format (string) and frontend format (array)
+  categories?: ArticleCategory[]; // Support both backend format (string) and frontend format (array)
   content: string;
-  coverAlt?: string;
-  coverUrl?: string;
+  coverImageAlt?: string;
+  coverImageUrl?: string;
   cover?: File; // Optional for existing articles
 };
