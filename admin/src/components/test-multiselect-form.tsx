@@ -40,8 +40,6 @@ export default function TestMultiSelectForm() {
   });
 
   function onSubmit(data: z.infer<typeof FormSchema>) {
-    console.log('Selected categories:', data.categories);
-    console.log('Backend format:', data.categories.join('.'));
     toast.success(`Selected: ${data.categories.join(', ')}`);
   }
 

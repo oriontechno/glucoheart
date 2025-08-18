@@ -32,17 +32,8 @@ export default function ChatContent({
   const handleSendMessage = () => {
     if (!newMessage.trim() || !session) return;
 
-    console.log('📤 New message:', {
-      sessionId: session.id,
-      senderId: currentUser.id,
-      content: newMessage.trim()
-    });
-
     // Clear input after "sending"
     setNewMessage('');
-
-    // TODO: Nanti bisa ditambahkan ke state local atau refresh data
-    console.log('✅ Message added to input (static mode)');
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {

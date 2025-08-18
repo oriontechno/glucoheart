@@ -55,8 +55,6 @@ export default async function ArticlesListingPage({}: ArticlesListingPageProps) 
   const totalArticles = data.data.total_articles;
   const articles: Article[] = data.data.articles;
 
-  console.log({ articles });
-
   return (
     <ArticlesTable
       data={articles}

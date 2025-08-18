@@ -14,7 +14,6 @@ export default async function UsersViewPage({ userId }: TUserViewPageProps) {
   if (userId !== 'new') {
     try {
       const data = await UsersServerService.getUserById(userId);
-      console.log({ data });
 
       if (data.success && data.data) {
         user = data.data;

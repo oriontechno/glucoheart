@@ -688,7 +688,5 @@ export default async function ChatSessionsListing({}: ChatSessionsListingProps) 
   const sessions = mockSessions;
   const currentUser = mockCurrentUser;
 
-  console.log('🔍 Chat sessions filters:', filters);
-
   return <ChatSessionsLayout sessions={sessions} currentUser={currentUser} />;
 }
