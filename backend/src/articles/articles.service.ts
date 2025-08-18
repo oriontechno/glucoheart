@@ -8,6 +8,7 @@ import {
 import { Inject } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import {
+  SQL,
   and,
   eq,
   ilike,
@@ -17,6 +18,7 @@ import {
   asc,
   notInArray,
   ne,
+  or,
 } from 'drizzle-orm';
 import {
   articles,
@@ -1344,5 +1346,153 @@ export class ArticlesService {
   async editorUpload(file: Express.Multer.File) {
     const { url, storageKey } = this.fileToPublic(file);
     return { url, storageKey };
+  }
+
+  // =================================== Categories ================================ //
+
+  async getCategoryById(id: number) {
+    const [row] = await this.db
+      .select({
+        id: articleCategories.id,
+        name: articleCategories.name,
+        slug: articleCategories.slug,
+        createdAt: articleCategories.createdAt,
+        updatedAt: articleCategories.updatedAt,
+      })
+      .from(articleCategories)
+      .where(eq(articleCategories.id, id))
+      .limit(1);
+
+    if (!row) throw new NotFoundException('Category not found');
+    return row;
+  }
+
+  /** All (no paging) with filters (search / ids / slugs) */
+  async findCategoriesAll(params: {
+    search?: string;
+    ids?: number[];
+    slugs?: string[];
+  }) {
+    const whereParts: (SQL<unknown> | undefined)[] = [];
+
+    if (params?.search && params.search.trim()) {
+      const q = `%${params.search.trim()}%`;
+      const cond = or(
+        ilike(articleCategories.name, q),
+        ilike(articleCategories.slug, q),
+      );
+      if (cond) whereParts.push(cond);
+    }
+
+    if (params?.ids && params.ids.length > 0) {
+      whereParts.push(inArray(articleCategories.id, params.ids));
+    }
+
+    if (params?.slugs && params.slugs.length > 0) {
+      whereParts.push(inArray(articleCategories.slug, params.slugs));
+    }
+
+    const whereExpr = whereParts.length ? and(...whereParts) : undefined;
+
+    const rows = await this.db
+      .select({
+        id: articleCategories.id,
+        name: articleCategories.name,
+        slug: articleCategories.slug,
+        createdAt: articleCategories.createdAt,
+        updatedAt: articleCategories.updatedAt,
+      })
+      .from(articleCategories)
+      .where(whereExpr)
+      .orderBy(asc(articleCategories.name));
+
+    return rows;
+  }
+
+  /** Paged + filter + sort */
+  async findCategoriesPaged(opts: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    sort?: string;
+    ids?: number[];
+    slugs?: string[];
+  }) {
+    const page = Math.max(1, Number(opts.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(opts.limit) || 10));
+    const offset = (page - 1) * limit;
+
+    const whereParts: (SQL<unknown> | undefined)[] = [];
+
+    if (opts?.search && opts.search.trim()) {
+      const q = `%${opts.search.trim()}%`;
+      const cond = or(
+        ilike(articleCategories.name, q),
+        ilike(articleCategories.slug, q),
+      );
+      if (cond) whereParts.push(cond);
+    }
+    if (opts?.ids && opts.ids.length > 0) {
+      whereParts.push(inArray(articleCategories.id, opts.ids));
+    }
+    if (opts?.slugs && opts.slugs.length > 0) {
+      whereParts.push(inArray(articleCategories.slug, opts.slugs));
+    }
+
+    const whereExpr = whereParts.length ? and(...whereParts) : undefined;
+
+    const [{ total }] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(articleCategories)
+      .where(whereExpr);
+
+    type SortItem = {
+      id: 'name' | 'slug' | 'created_at' | 'updated_at';
+      desc?: boolean;
+    };
+    let orderBy: any[] = [asc(articleCategories.name)];
+    if (opts.sort) {
+      try {
+        const parsed = JSON.parse(opts.sort) as SortItem[];
+        const cols = {
+          name: articleCategories.name,
+          slug: articleCategories.slug,
+          created_at: articleCategories.createdAt,
+          updated_at: articleCategories.updatedAt,
+        } as const;
+        const mapped = parsed
+          .map((s) => {
+            const col = cols[s.id];
+            return col ? (s.desc ? desc(col) : asc(col)) : null;
+          })
+          .filter(Boolean) as any[];
+        if (mapped.length) orderBy = mapped;
+      } catch {
+        /* ignore invalid sort */
+      }
+    }
+
+    const categories = await this.db
+      .select({
+        id: articleCategories.id,
+        name: articleCategories.name,
+        slug: articleCategories.slug,
+        createdAt: articleCategories.createdAt,
+        updatedAt: articleCategories.updatedAt,
+      })
+      .from(articleCategories)
+      .where(whereExpr)
+      .orderBy(...orderBy)
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      total,
+      offset,
+      limit,
+      categories,
+    };
   }
 }
