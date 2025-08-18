@@ -10,6 +10,11 @@ import {
   UseGuards,
   Request,
   Req,
+  BadRequestException,
+  ForbiddenException,
+  UploadedFile,
+  UseInterceptors,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { ZodValidation } from '../zod/zod-validation.decorator';
@@ -26,15 +31,107 @@ import {
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { randomBytes } from 'crypto';
+import { promises as fs } from 'fs';
+
 type RequestUser = {
   id: number;
   role?: 'ADMIN' | 'SUPPORT' | 'NURSE' | 'USER';
+};
+
+// ==== Multer options khusus avatar (inline di controller) ====
+const multerAvatarOptions = {
+  storage: diskStorage({
+    destination: async (_req, _file, cb) => {
+      try {
+        const dest = join(process.cwd(), 'uploads', 'avatar');
+        await fs.mkdir(dest, { recursive: true });
+        cb(null, dest);
+      } catch (err) {
+        cb(err as any, '');
+      }
+    },
+    filename: (_req, file, cb) => {
+      const name =
+        Date.now() +
+        '-' +
+        randomBytes(6).toString('hex') +
+        extname(file.originalname);
+      cb(null, name);
+    },
+  }),
+  fileFilter: (_req: any, file: Express.Multer.File, cb: any) => {
+    const ok =
+      file.mimetype === 'image/jpeg' ||
+      file.mimetype === 'image/png' ||
+      file.mimetype === 'image/webp' ||
+      file.mimetype === 'image/jpg' ||
+      file.mimetype === 'image/gif';
+    if (!ok)
+      return cb(new BadRequestException('Only image files are allowed'), false);
+    cb(null, true);
+  },
+  limits: { fileSize: 3 * 1024 * 1024 }, // 3MB
 };
 
 @Controller('users')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  // ====== User ganti avatar miliknya ======
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('avatar', multerAvatarOptions))
+  async uploadMyAvatar(
+    @Req() req: Request & { user: RequestUser },
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    return this.usersService.updateMyAvatar({ id: req.user.id }, file!);
+  }
+
+  // Hapus avatar milik sendiri
+  @Delete('me/avatar')
+  async deleteMyAvatar(@Req() req: Request & { user: RequestUser }) {
+    return this.usersService.removeMyAvatar({ id: req.user.id });
+  }
+
+  // ====== Admin/Support set avatar user lain ======
+  @Post(':id/avatar')
+  @UseInterceptors(FileInterceptor('avatar', multerAvatarOptions))
+  async adminSetUserAvatar(
+    @Req() req: Request & { user: RequestUser },
+    @Param('id', ParseIntPipe) userId: number,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPPORT') {
+      throw new ForbiddenException('Admin/Support only');
+    }
+    if (!file) throw new BadRequestException('No file uploaded');
+    return this.usersService.adminSetAvatar(
+      { id: req.user.id, role: req.user.role },
+      userId,
+      file!,
+    );
+  }
+
+  // Admin/Support hapus avatar user lain
+  @Delete(':id/avatar')
+  async adminRemoveUserAvatar(
+    @Req() req: Request & { user: RequestUser },
+    @Param('id', ParseIntPipe) userId: number,
+  ) {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'SUPPORT') {
+      throw new ForbiddenException('Admin/Support only');
+    }
+    return this.usersService.adminRemoveAvatar(
+      { id: req.user.id, role: req.user.role },
+      userId,
+    );
+  }
 
   @Post()
   @Roles('ADMIN', 'SUPPORT')
