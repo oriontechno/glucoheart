@@ -20,6 +20,10 @@ export type Article = {
   title: string;
   slug: string;
   status: 'published' | 'draft'; // bisa pakai union biar ketat
-  summary: string;
-  categories: string[];
+  summary?: string;
+  categories?: string | string[]; // Support both backend format (string) and frontend format (array)
+  content: string;
+  coverAlt?: string;
+  coverUrl?: string;
+  cover?: File; // Optional for existing articles
 };
