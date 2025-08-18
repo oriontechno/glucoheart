@@ -157,13 +157,27 @@ export class ArticlesService {
     return { url, storageKey };
   }
 
-  private async deleteByStorageKey(storageKey: string) {
-    try {
-      const abs = join(process.cwd(), storageKey); // 'uploads/...'
-      await fs.unlink(abs);
-    } catch {
-      // ignore error (file mungkin sudah tidak ada)
-    }
+  /** Ambil peta coverImageId -> url (batch) */
+  private async getCoverUrlMapByImageIds(
+    imageIds: Array<number | null | undefined>,
+  ) {
+    const ids = Array.from(
+      new Set(
+        (imageIds || []).filter((v): v is number =>
+          Number.isInteger(v as number),
+        ),
+      ),
+    );
+    const map = new Map<number, string>();
+    if (!ids.length) return map;
+
+    const rows = await this.db
+      .select({ id: articleImages.id, url: articleImages.url })
+      .from(articleImages)
+      .where(inArray(articleImages.id, ids));
+
+    for (const r of rows) map.set(r.id, r.url);
+    return map;
   }
 
   private async makeUniqueCategorySlug(baseName: string) {
@@ -583,14 +597,12 @@ export class ArticlesService {
   }) {
     const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 200);
 
-    // WHERE dasar (status/search)
     const whereBase = this.buildWhere({
       status: params.status,
       search: params.search,
       defaultToPublished: true,
     });
 
-    // Filter kategori via EXISTS (OR: salah satu slug cocok)
     let where = whereBase;
     if (params.categories) {
       const slugs = Array.from(
@@ -602,18 +614,17 @@ export class ArticlesService {
         ),
       );
       if (slugs.length) {
-        const slugList = slugs; // string[]
         where = and(
           whereBase,
           sql`
-    EXISTS (
-      SELECT 1
-      FROM "article_category_links" acl
-      JOIN "article_categories" ac ON ac.id = acl.category_id
-      WHERE acl.article_id = ${articles.id}
-        AND ac.slug IN (${sql.join(slugs, sql`, `)}) 
-    )
-  `,
+          EXISTS (
+            SELECT 1
+            FROM "article_category_links" acl
+            JOIN "article_categories" ac ON ac.id = acl.category_id
+            WHERE acl.article_id = ${articles.id}
+              AND ac.slug IN (${sql.join(slugs, sql`, `)})
+          )
+        `,
         );
       }
     }
@@ -635,8 +646,14 @@ export class ArticlesService {
       .orderBy(desc(articles.publishedAt ?? articles.createdAt))
       .limit(limit);
 
+    // ambil URL cover secara batch
+    const coverMap = await this.getCoverUrlMapByImageIds(
+      rows.map((r) => r.coverImageId),
+    );
+
     // attach categories
     const map = await this.getCategoriesMap(rows.map((r) => r.id));
+
     return rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -644,6 +661,9 @@ export class ArticlesService {
       status: r.status,
       summary: r.summary ?? null,
       coverImageId: r.coverImageId ?? null,
+      coverImageUrl: r.coverImageId
+        ? (coverMap.get(r.coverImageId) ?? null)
+        : null, // ⬅️ URL cover
       created_at: r.createdAt ?? null,
       updated_at: r.updatedAt ?? null,
       published_at: r.publishedAt ?? null,
@@ -722,6 +742,11 @@ export class ArticlesService {
       .limit(limit)
       .offset(offset);
 
+    // ambil URL cover batch
+    const coverMap = await this.getCoverUrlMapByImageIds(
+      rows.map((r) => r.coverImageId),
+    );
+
     const map = await this.getCategoriesMap(rows.map((r) => r.id));
 
     return {
@@ -738,6 +763,9 @@ export class ArticlesService {
         status: r.status,
         summary: r.summary ?? null,
         coverImageId: r.coverImageId ?? null,
+        coverImageUrl: r.coverImageId
+          ? (coverMap.get(r.coverImageId) ?? null)
+          : null, // ⬅️ URL cover
         created_at: r.createdAt ?? null,
         updated_at: r.updatedAt ?? null,
         published_at: r.publishedAt ?? null,
@@ -1214,35 +1242,140 @@ export class ArticlesService {
   }
 
   async getPublicBySlug(slug: string) {
+    // ambil artikel published by slug
     const [row] = await this.db
-      .select()
+      .select({
+        id: articles.id,
+        title: articles.title,
+        slug: articles.slug,
+        summary: articles.summary,
+        content: articles.content,
+        status: articles.status,
+        coverImageId: articles.coverImageId,
+        publishedAt: articles.publishedAt,
+        createdAt: articles.createdAt,
+        updatedAt: articles.updatedAt,
+        createdBy: articles.createdBy,
+        updatedBy: articles.updatedBy,
+      })
       .from(articles)
-      .where(and(eq(articles.slug, slug), eq(articles.status, 'published')));
+      .where(and(eq(articles.slug, slug), eq(articles.status, 'published')))
+      .limit(1);
+
     if (!row) throw new NotFoundException('Article not found');
 
+    // ambil semua images milik artikel (untuk posisi & cover)
     const images = await this.db
-      .select()
+      .select({
+        id: articleImages.id,
+        articleId: articleImages.articleId,
+        url: articleImages.url,
+        storageKey: articleImages.storageKey,
+        alt: articleImages.alt,
+        isCover: articleImages.isCover,
+        position: articleImages.position,
+        createdAt: articleImages.createdAt,
+      })
       .from(articleImages)
       .where(eq(articleImages.articleId, row.id))
       .orderBy(articleImages.position);
-    return { ...row, images };
+
+    // coverImageUrl (ambil dari images yang sudah kita fetch; fallback query kalau perlu)
+    let coverImageUrl: string | null = null;
+    if (row.coverImageId) {
+      const cover = images.find((img) => img.id === row.coverImageId);
+      if (cover) {
+        coverImageUrl = cover.url ?? null;
+      } else {
+        const [cv] = await this.db
+          .select({ url: articleImages.url })
+          .from(articleImages)
+          .where(eq(articleImages.id, row.coverImageId))
+          .limit(1);
+        coverImageUrl = cv?.url ?? null;
+      }
+    }
+
+    // categories
+    const catMap = await this.getCategoriesMap([row.id]);
+    const categories = catMap.get(row.id) ?? [];
+
+    return {
+      ...row,
+      coverImageUrl,
+      images,
+      categories,
+    };
   }
 
   async getByIdForAdmin(actingUser: { id: number; role?: string }, id: number) {
     this.assertWriter(actingUser.role);
 
+    // Ambil artikel dengan kolom yang jelas
     const [row] = await this.db
-      .select()
+      .select({
+        id: articles.id,
+        title: articles.title,
+        slug: articles.slug,
+        summary: articles.summary,
+        content: articles.content,
+        status: articles.status,
+        coverImageId: articles.coverImageId,
+        createdBy: articles.createdBy,
+        updatedBy: articles.updatedBy,
+        publishedAt: articles.publishedAt,
+        createdAt: articles.createdAt,
+        updatedAt: articles.updatedAt,
+      })
       .from(articles)
-      .where(eq(articles.id, id));
+      .where(eq(articles.id, id))
+      .limit(1);
+
     if (!row) throw new NotFoundException('Article not found');
 
+    // Ambil semua images milik artikel (sekalian buat cari cover url)
     const images = await this.db
-      .select()
+      .select({
+        id: articleImages.id,
+        articleId: articleImages.articleId,
+        url: articleImages.url,
+        storageKey: articleImages.storageKey,
+        alt: articleImages.alt,
+        isCover: articleImages.isCover,
+        position: articleImages.position,
+        createdAt: articleImages.createdAt,
+      })
       .from(articleImages)
       .where(eq(articleImages.articleId, id))
       .orderBy(articleImages.position);
-    return { ...row, images };
+
+    // Tentukan coverImageUrl
+    let coverImageUrl: string | null = null;
+    if (row.coverImageId) {
+      const coverInList = images.find((img) => img.id === row.coverImageId);
+      if (coverInList) {
+        coverImageUrl = coverInList.url ?? null;
+      } else {
+        // fallback kalau tidak ada di list (harusnya jarang terjadi)
+        const [cv] = await this.db
+          .select({ url: articleImages.url })
+          .from(articleImages)
+          .where(eq(articleImages.id, row.coverImageId))
+          .limit(1);
+        coverImageUrl = cv?.url ?? null;
+      }
+    }
+
+    // Ambil categories untuk artikel ini
+    const catMap = await this.getCategoriesMap([row.id]);
+    const categories = catMap.get(row.id) ?? [];
+
+    return {
+      ...row,
+      coverImageUrl, // <-- tambahan
+      images,
+      categories, // <-- tambahan
+    };
   }
 
   async listAllForAdmin(
