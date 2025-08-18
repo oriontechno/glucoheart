@@ -12,8 +12,6 @@ export default async function DiscussionThreadsViewPage({
   let discussionThread = null;
   let pageTitle = 'Create New Discussion Thread';
 
-  console.log({ discussionThreadId });
-
   if (discussionThreadId !== 'new') {
     try {
       const data =

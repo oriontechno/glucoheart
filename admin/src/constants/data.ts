@@ -59,6 +59,13 @@ export const navItems: NavItem[] = [
     ]
   },
   {
+    title: 'Chat Sessions',
+    url: '/dashboard/chat-sessions',
+    icon: 'laptop',
+    shortcut: ['c', 's'],
+    isActive: false
+  },
+  {
     title: 'Users',
     url: '/dashboard/users',
     icon: 'user',

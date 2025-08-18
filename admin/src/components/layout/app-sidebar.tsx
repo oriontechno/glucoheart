@@ -202,7 +202,7 @@ export default function AppSidebar() {
                         }
                       ],
                       fullName: user
-                        ? `${user.firstName} ${user.lastName}`
+                        ? `${user.firstName} ${user.lastName ? user.lastName : ''}`
                         : 'Loading...',
                       imageUrl: user?.profilePicture || undefined
                     }}
@@ -229,7 +229,7 @@ export default function AppSidebar() {
                             }
                           ],
                           fullName: user
-                            ? `${user.firstName} ${user.lastName}`
+                            ? `${user.firstName} ${user.lastName ? user.lastName : ''}`
                             : 'Loading...',
                           imageUrl: user?.profilePicture || undefined,
                           role: user?.role

@@ -364,11 +364,7 @@ export class UsersService {
       throw new ForbiddenException('You can only update your own profile');
     }
 
-    // Hash password if provided
     let updateData: any = { ...updateUserDto };
-    if (updateUserDto.password) {
-      updateData.password = await bcrypt.hash(updateUserDto.password, 10);
-    }
 
     // Only Admin can change roles
     if (updateUserDto.role && currentUserRole !== 'ADMIN') {

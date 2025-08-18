@@ -10,7 +10,8 @@ export const searchParams = {
   perPage: parseAsInteger.withDefault(10),
 
   // User search fields
-  search: parseAsString,
+  search: parseAsString, // General search parameter for all columns
+  firstName: parseAsString,
   email: parseAsString,
   role: parseAsString,
   active: parseAsString,
@@ -19,6 +20,7 @@ export const searchParams = {
   // Common fields
   gender: parseAsString,
   category: parseAsString,
+  categories: parseAsString,
   sort: parseAsString
   // advanced filter
   // filters: getFiltersStateParser().withDefault([]),
