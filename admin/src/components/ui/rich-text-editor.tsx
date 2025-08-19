@@ -42,19 +42,19 @@ export function RichTextEditor({
       StarterKit.configure({
         bulletList: {
           HTMLAttributes: {
-            class: 'prose-bullet-list',
-          },
+            class: 'prose-bullet-list'
+          }
         },
         orderedList: {
           HTMLAttributes: {
-            class: 'prose-ordered-list',
-          },
+            class: 'prose-ordered-list'
+          }
         },
         listItem: {
           HTMLAttributes: {
-            class: 'prose-list-item',
-          },
-        },
+            class: 'prose-list-item'
+          }
+        }
       }),
       Placeholder.configure({
         placeholder: placeholder || 'Write your article content here...'
@@ -207,9 +207,15 @@ export function RichTextEditor({
           variant='ghost'
           size='sm'
           onClick={() => {
-            console.log('Toggling bullet list, current state:', editor.isActive('bulletList'));
+            console.log(
+              'Toggling bullet list, current state:',
+              editor.isActive('bulletList')
+            );
             editor.chain().focus().toggleBulletList().run();
-            console.log('After toggle, new state:', editor.isActive('bulletList'));
+            console.log(
+              'After toggle, new state:',
+              editor.isActive('bulletList')
+            );
           }}
           className={cn(
             'h-8 w-8 p-0',
@@ -226,9 +232,15 @@ export function RichTextEditor({
           variant='ghost'
           size='sm'
           onClick={() => {
-            console.log('Toggling ordered list, current state:', editor.isActive('orderedList'));
+            console.log(
+              'Toggling ordered list, current state:',
+              editor.isActive('orderedList')
+            );
             editor.chain().focus().toggleOrderedList().run();
-            console.log('After toggle, new state:', editor.isActive('orderedList'));
+            console.log(
+              'After toggle, new state:',
+              editor.isActive('orderedList')
+            );
           }}
           className={cn(
             'h-8 w-8 p-0',
@@ -355,30 +367,32 @@ export function RichTextEditor({
           color: hsl(var(--foreground));
         }
 
-        .ProseMirror ul, .ProseMirror ol {
+        .ProseMirror ul,
+        .ProseMirror ol {
           padding-left: 1.5rem;
           margin: 0.5rem 0;
           color: hsl(var(--foreground));
         }
-        
+
         .ProseMirror ul {
           list-style-type: disc;
         }
-        
+
         .ProseMirror ol {
           list-style-type: decimal;
         }
-        
+
         .ProseMirror li {
           color: hsl(var(--foreground));
           margin: 0.25rem 0;
           display: list-item;
         }
-        
+
         .ProseMirror li p {
           margin: 0;
           display: inline;
-        }        .ProseMirror blockquote {
+        }
+        .ProseMirror blockquote {
           border-left: 4px solid hsl(var(--border));
           padding-left: 1rem;
           margin: 1rem 0;

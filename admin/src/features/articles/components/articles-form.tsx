@@ -26,12 +26,11 @@ import * as z from 'zod';
 import { FileUploader } from '@/components/file-uploader';
 import { MultiSelect } from '@/components/multi-select';
 import { ACCEPTED_IMAGE_TYPES, MAX_FILE_SIZE } from '@/constants/form';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Article } from '@/types/entity';
 import { useCategories } from '../hooks/use-categories';
 import { articlesService } from '@/lib/api/articles.service';
 import { useRouter } from 'next/navigation';
-import { config } from '@/config/env';
 
 export default function ArticlesForm({
   initialData,
@@ -309,7 +308,11 @@ export default function ArticlesForm({
                   <FormControl>
                     <RichTextEditor
                       value={field.value}
-                      onChange={field.onChange}
+                      onChange={(value) => {
+                        console.log('🔄 Content changed in form:');
+                        console.log('- Raw HTML:', value);
+                        field.onChange(value);
+                      }}
                       placeholder='Enter article content...'
                       className='min-h-[200px]'
                     />
