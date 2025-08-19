@@ -19,6 +19,7 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
@@ -64,9 +65,21 @@ export default function ArticlesForm({
         message: 'Article summary must not exceed 220 characters.'
       })
       .optional(),
-    content: z.string().min(1, {
-      message: 'Article content is required.'
-    }),
+    content: z
+      .string()
+      .min(1, {
+        message: 'Article content is required.'
+      })
+      .refine(
+        (value) => {
+          // Remove HTML tags to check actual content length
+          const textOnly = value.replace(/<[^>]*>/g, '').trim();
+          return textOnly.length > 0;
+        },
+        {
+          message: 'Article content cannot be empty.'
+        }
+      ),
     status: z.enum(['draft', 'published']).default('draft'),
     categories: z
       .array(z.string())
@@ -173,15 +186,18 @@ export default function ArticlesForm({
     }
 
     // Log the form data for debugging
-    // console.log('Form submission data:');
-    // console.log('Title:', values.title);
-    // console.log('Summary:', values.summary);
-    // console.log('Content:', values.content);
-    // console.log('Status:', values.status);
-    // console.log('Categories (array):', values.categories);
-    // console.log('Categories (backend format):', values.categories.join('.'));
-    // console.log('Cover file:', values.cover?.[0]?.name);
-    // console.log('Cover URL:', values.coverUrl);
+    console.log('Form submission data:');
+    console.log('Title:', values.title);
+    console.log('Summary:', values.summary);
+    console.log('Content (HTML):', values.content);
+    console.log(
+      'Content (text only):',
+      values.content.replace(/<[^>]*>/g, '').trim()
+    );
+    console.log('Status:', values.status);
+    console.log('Categories (array):', values.categories);
+    console.log('Categories (backend format):', values.categories.join('.'));
+    console.log('Cover file:', values.cover?.[0]?.name);
 
     // TODO: Implement actual API call
     if (initialData?.id) {
@@ -291,10 +307,11 @@ export default function ArticlesForm({
                 <FormItem>
                   <FormLabel>Content</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder='Enter article content'
-                      className='min-h-[120px] resize-none'
-                      {...field}
+                    <RichTextEditor
+                      value={field.value}
+                      onChange={field.onChange}
+                      placeholder='Enter article content...'
+                      className='min-h-[200px]'
                     />
                   </FormControl>
                   <FormMessage />
