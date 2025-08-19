@@ -6,6 +6,7 @@ import {
   Body,
   Req,
   ParseIntPipe,
+  Query,
 } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { ZodValidation } from '../zod/zod-validation.decorator';
@@ -75,6 +76,24 @@ export class ChatController {
   async listSessions(@Req() req: Request & { user: RequestUser }) {
     const { user } = req;
     return this.chat.listSessions(user.id);
+  }
+
+  // NEW: Admin – get all sessions (paged + search)
+  @Get('sessions/admin')
+  async listAllSessionsAdmin(
+    @Req() req: Request & { user: RequestUser },
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+    @Query('search') search?: string,
+    @Query('type') type?: 'one_to_one' | 'group',
+  ) {
+    const acting = { id: req.user.id, role: req.user.role };
+    return this.chat.listAllSessionsAdmin(acting, {
+      page: Number(page) || 1,
+      limit: Number(limit) || 20,
+      search,
+      type,
+    });
   }
 
   // POST /chat/session/:sessionId/assign-nurse : assign nurse (admin/support only)

@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { users } from '../db/schema';
-import { and, asc, desc, eq, ilike, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, sql, ne } from 'drizzle-orm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
@@ -17,6 +17,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
 import { validatePasswordStrength } from './password.policy';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 
 @Injectable()
 export class UsersService {
@@ -107,6 +109,145 @@ export class UsersService {
     } catch {
       return [desc(def)];
     }
+  }
+
+  // Utility: ubah file path -> public URL & storageKey
+  private toPublicFromFile(file: Express.Multer.File) {
+    // file.path: /.../uploads/avatar/xxx.ext
+    // public url: /uploads/avatar/xxx.ext
+    const rel = file.path.replace(/\\/g, '/'); // normalize
+    const idx = rel.lastIndexOf('/uploads/');
+    const publicUrl =
+      idx >= 0 ? rel.slice(idx) : '/uploads/avatar/' + rel.split('/').pop();
+    return { url: publicUrl, storageKey: publicUrl.replace(/^\//, '') };
+    // storageKey akan relatif dari project root: 'uploads/avatar/xxx.ext'
+  }
+
+  private async getUserRow(userId: number) {
+    const [u] = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        role: users.role,
+        profilePicture: users.profilePicture,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return u;
+  }
+
+  private async safeDeleteAvatarIfUnused(
+    oldUrl: string | null | undefined,
+    excludeUserId: number,
+  ) {
+    if (!oldUrl) return;
+    if (!oldUrl.startsWith('/uploads/avatar/')) return; // hanya hapus file lokal avatar
+
+    // cek apakah ada user lain yang masih memakai URL ini
+    const [{ c }] = await this.db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(users)
+      .where(
+        and(eq(users.profilePicture, oldUrl), ne(users.id, excludeUserId)),
+      );
+
+    if (c > 0) return; // masih dipakai user lain
+
+    const abs = join(process.cwd(), oldUrl.replace(/^\//, ''));
+    await fs.unlink(abs).catch(() => {});
+  }
+
+  // ========== User ganti avatar miliknya ==========
+  async updateMyAvatar(acting: { id: number }, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No file uploaded');
+
+    const me = await this.getUserRow(acting.id);
+    if (!me) throw new NotFoundException('User not found');
+
+    const { url, storageKey } = this.toPublicFromFile(file);
+
+    await this.db
+      .update(users)
+      .set({ profilePicture: url, updatedAt: new Date() })
+      .where(eq(users.id, acting.id));
+
+    // hapus file lama kalau lokal & tidak dipakai user lain
+    await this.safeDeleteAvatarIfUnused(me.profilePicture, acting.id);
+
+    return {
+      message: 'Avatar updated successfully',
+      id: acting.id,
+      profilePicture: url,
+    };
+  }
+
+  async removeMyAvatar(acting: { id: number }) {
+    const me = await this.getUserRow(acting.id);
+    if (!me) throw new NotFoundException('User not found');
+
+    await this.db
+      .update(users)
+      .set({ profilePicture: null as any, updatedAt: new Date() })
+      .where(eq(users.id, acting.id));
+
+    await this.safeDeleteAvatarIfUnused(me.profilePicture, acting.id);
+
+    return { message: 'Avatar removed successfully' };
+  }
+
+  // ========== Admin set/hapus avatar user lain ==========
+  async adminSetAvatar(
+    acting: { id: number; role?: string },
+    userId: number,
+    file: Express.Multer.File,
+  ) {
+    if (acting.role !== 'ADMIN' && acting.role !== 'SUPPORT') {
+      throw new ForbiddenException('Admin/Support only');
+    }
+    if (!file) throw new BadRequestException('No file uploaded');
+
+    const target = await this.getUserRow(userId);
+    if (!target) throw new NotFoundException('Target user not found');
+
+    const { url } = this.toPublicFromFile(file);
+
+    await this.db
+      .update(users)
+      .set({ profilePicture: url, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await this.safeDeleteAvatarIfUnused(target.profilePicture, userId);
+
+    return {
+      message: 'Avatar updated successfully',
+      userId,
+      profilePicture: url,
+    };
+  }
+
+  async adminRemoveAvatar(
+    acting: { id: number; role?: string },
+    userId: number,
+  ) {
+    if (acting.role !== 'ADMIN' && acting.role !== 'SUPPORT') {
+      throw new ForbiddenException('Admin/Support only');
+    }
+
+    const target = await this.getUserRow(userId);
+    if (!target) throw new NotFoundException('Target user not found');
+
+    await this.db
+      .update(users)
+      .set({ profilePicture: null as any, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await this.safeDeleteAvatarIfUnused(target.profilePicture, userId);
+
+    return { message: 'Avatar removed successfully', userId };
   }
 
   // === GET /users/all ===
