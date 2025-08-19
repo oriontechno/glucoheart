@@ -184,20 +184,6 @@ export default function ArticlesForm({
       formData.append('cover', values.cover[0]);
     }
 
-    // Log the form data for debugging
-    console.log('Form submission data:');
-    console.log('Title:', values.title);
-    console.log('Summary:', values.summary);
-    console.log('Content (HTML):', values.content);
-    console.log(
-      'Content (text only):',
-      values.content.replace(/<[^>]*>/g, '').trim()
-    );
-    console.log('Status:', values.status);
-    console.log('Categories (array):', values.categories);
-    console.log('Categories (backend format):', values.categories.join('.'));
-    console.log('Cover file:', values.cover?.[0]?.name);
-
     // TODO: Implement actual API call
     if (initialData?.id) {
       try {

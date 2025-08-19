@@ -4,8 +4,16 @@ import React from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 import {
   Bold,
   Italic,
@@ -19,7 +27,10 @@ import {
   Redo,
   Heading1,
   Heading2,
-  Heading3
+  Heading3,
+  ImageIcon,
+  Link,
+  Upload
 } from 'lucide-react';
 
 interface RichTextEditorProps {
@@ -37,6 +48,108 @@ export function RichTextEditor({
   className,
   disabled = false
 }: RichTextEditorProps) {
+  // Hidden file input ref
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Handle image upload
+  const handleImageUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Handle image URL insertion
+  const handleImageUrl = () => {
+    const url = prompt('Enter image URL:');
+    if (url) {
+      // Validate URL format
+      try {
+        new URL(url);
+      } catch {
+        toast.error('Invalid URL', {
+          description: 'Please enter a valid image URL'
+        });
+        return;
+      }
+
+      // Show loading toast
+      const loadingToast = toast.loading('Loading image...', {
+        description: 'Checking if the image is accessible'
+      });
+
+      // Test if image loads
+      const img = document.createElement('img');
+      img.onload = () => {
+        editor?.chain().focus().setImage({ src: url, alt: 'Image' }).run();
+        toast.dismiss(loadingToast);
+        toast.success('Image inserted successfully', {
+          description: 'Image loaded from URL'
+        });
+      };
+
+      img.onerror = () => {
+        toast.dismiss(loadingToast);
+        toast.error('Failed to load image', {
+          description: 'The image URL is not accessible or invalid'
+        });
+      };
+
+      img.src = url;
+    }
+  };
+
+  // Handle file selection
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Invalid file type', {
+        description: 'Please select an image file (JPG, PNG, GIF, WebP)'
+      });
+      return;
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large', {
+        description: 'File size should be less than 5MB'
+      });
+      return;
+    }
+
+    // Show loading toast
+    const loadingToast = toast.loading('Uploading image...', {
+      description: 'Please wait while we process your image'
+    });
+
+    // Convert to base64 for preview (in production, you'd upload to server)
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const src = e.target?.result as string;
+
+      // Insert image into editor
+      editor?.chain().focus().setImage({ src, alt: file.name }).run();
+
+      // Dismiss loading toast and show success
+      toast.dismiss(loadingToast);
+      toast.success('Image uploaded successfully', {
+        description: `${file.name} (${(file.size / 1024).toFixed(2)} KB)`
+      });
+    };
+
+    reader.onerror = () => {
+      toast.dismiss(loadingToast);
+      toast.error('Upload failed', {
+        description: 'Failed to read the image file'
+      });
+    };
+
+    reader.readAsDataURL(file);
+
+    // Reset input
+    event.target.value = '';
+  };
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -54,6 +167,13 @@ export function RichTextEditor({
           HTMLAttributes: {
             class: 'prose-list-item'
           }
+        }
+      }),
+      Image.configure({
+        inline: true,
+        allowBase64: true,
+        HTMLAttributes: {
+          class: 'prose-image'
         }
       }),
       Placeholder.configure({
@@ -207,15 +327,15 @@ export function RichTextEditor({
           variant='ghost'
           size='sm'
           onClick={() => {
-            console.log(
-              'Toggling bullet list, current state:',
-              editor.isActive('bulletList')
-            );
+            const wasActive = editor.isActive('bulletList');
             editor.chain().focus().toggleBulletList().run();
-            console.log(
-              'After toggle, new state:',
-              editor.isActive('bulletList')
-            );
+            const isActive = editor.isActive('bulletList');
+
+            if (isActive && !wasActive) {
+              toast.success('Bullet list activated');
+            } else if (!isActive && wasActive) {
+              toast.success('Bullet list deactivated');
+            }
           }}
           className={cn(
             'h-8 w-8 p-0',
@@ -232,15 +352,15 @@ export function RichTextEditor({
           variant='ghost'
           size='sm'
           onClick={() => {
-            console.log(
-              'Toggling ordered list, current state:',
-              editor.isActive('orderedList')
-            );
+            const wasActive = editor.isActive('orderedList');
             editor.chain().focus().toggleOrderedList().run();
-            console.log(
-              'After toggle, new state:',
-              editor.isActive('orderedList')
-            );
+            const isActive = editor.isActive('orderedList');
+
+            if (isActive && !wasActive) {
+              toast.success('Numbered list activated');
+            } else if (!isActive && wasActive) {
+              toast.success('Numbered list deactivated');
+            }
           }}
           className={cn(
             'h-8 w-8 p-0',
@@ -282,6 +402,40 @@ export function RichTextEditor({
         >
           <Code className='h-4 w-4' />
         </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type='button'
+              variant='ghost'
+              size='sm'
+              className={cn(
+                'h-8 w-8 p-0',
+                'text-muted-foreground hover:text-foreground hover:bg-accent'
+              )}
+              disabled={disabled}
+              title='Insert Image'
+            >
+              <ImageIcon className='h-4 w-4' />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align='start'>
+            <DropdownMenuItem
+              onClick={handleImageUpload}
+              className='cursor-pointer'
+            >
+              <Upload className='mr-2 h-4 w-4' />
+              Upload Image
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleImageUrl}
+              className='cursor-pointer'
+            >
+              <Link className='mr-2 h-4 w-4' />
+              Insert URL
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className='bg-border mx-1 h-6 w-px' />
 
@@ -325,6 +479,16 @@ export function RichTextEditor({
           className='outline-none'
         />
       </div>
+
+      {/* Hidden file input for image upload */}
+      <input
+        type='file'
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept='image/*'
+        className='hidden'
+        multiple={false}
+      />
 
       <style jsx global>{`
         .ProseMirror {
@@ -424,6 +588,27 @@ export function RichTextEditor({
 
         .ProseMirror li {
           color: hsl(var(--foreground));
+        }
+
+        .ProseMirror img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 0.375rem;
+          margin: 1rem 0;
+          box-shadow:
+            0 1px 3px 0 rgb(0 0 0 / 0.1),
+            0 1px 2px -1px rgb(0 0 0 / 0.1);
+          cursor: pointer;
+          transition: transform 0.2s ease-in-out;
+        }
+
+        .ProseMirror img:hover {
+          transform: scale(1.02);
+        }
+
+        .ProseMirror img.ProseMirror-selectednode {
+          outline: 3px solid hsl(var(--primary));
+          outline-offset: 2px;
         }
       `}</style>
     </div>

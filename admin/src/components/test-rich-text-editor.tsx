@@ -18,8 +18,6 @@ export default function TestRichTextEditor() {
   `);
 
   const handleSubmit = () => {
-    console.log('Content HTML:', content);
-    console.log('Content Length:', content.length);
     alert('Content saved! Check console for details.');
   };
 
