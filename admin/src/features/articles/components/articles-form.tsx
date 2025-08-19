@@ -309,8 +309,6 @@ export default function ArticlesForm({
                     <RichTextEditor
                       value={field.value}
                       onChange={(value) => {
-                        console.log('🔄 Content changed in form:');
-                        console.log('- Raw HTML:', value);
                         field.onChange(value);
                       }}
                       placeholder='Enter article content...'
