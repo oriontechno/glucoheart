@@ -1,3 +1,4 @@
+import { config } from '@/config/env';
 import { SessionOptions } from 'iron-session';
 
 export interface SessionData {
@@ -18,9 +19,7 @@ export const defaultSession: SessionData = {
 };
 
 export const sessionOptions: SessionOptions = {
-  password:
-    process.env.SESSION_SECRET ||
-    'complex_password_at_least_32_characters_long_for_security',
+  password: config.SESSION_SECRET || '',
   cookieName: 'glucoheart-session',
   cookieOptions: {
     secure: process.env.NODE_ENV === 'production',
