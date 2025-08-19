@@ -20,7 +20,6 @@ export default async function ArticlesViewPage({
 
       if (data.success && data.data) {
         article = data.data as Article;
-        console.log({ article });
         pageTitle = `Edit Article`;
       } else {
         notFound();

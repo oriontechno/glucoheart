@@ -19,18 +19,18 @@ import {
   SelectValue
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { FileUploader } from '@/components/file-uploader';
 import { MultiSelect } from '@/components/multi-select';
 import { ACCEPTED_IMAGE_TYPES, MAX_FILE_SIZE } from '@/constants/form';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Article } from '@/types/entity';
 import { useCategories } from '../hooks/use-categories';
 import { articlesService } from '@/lib/api/articles.service';
 import { useRouter } from 'next/navigation';
-import { config } from '@/config/env';
 
 export default function ArticlesForm({
   initialData,
@@ -64,9 +64,21 @@ export default function ArticlesForm({
         message: 'Article summary must not exceed 220 characters.'
       })
       .optional(),
-    content: z.string().min(1, {
-      message: 'Article content is required.'
-    }),
+    content: z
+      .string()
+      .min(1, {
+        message: 'Article content is required.'
+      })
+      .refine(
+        (value) => {
+          // Remove HTML tags to check actual content length
+          const textOnly = value.replace(/<[^>]*>/g, '').trim();
+          return textOnly.length > 0;
+        },
+        {
+          message: 'Article content cannot be empty.'
+        }
+      ),
     status: z.enum(['draft', 'published']).default('draft'),
     categories: z
       .array(z.string())
@@ -171,17 +183,6 @@ export default function ArticlesForm({
     if (values.cover && values.cover.length > 0) {
       formData.append('cover', values.cover[0]);
     }
-
-    // Log the form data for debugging
-    // console.log('Form submission data:');
-    // console.log('Title:', values.title);
-    // console.log('Summary:', values.summary);
-    // console.log('Content:', values.content);
-    // console.log('Status:', values.status);
-    // console.log('Categories (array):', values.categories);
-    // console.log('Categories (backend format):', values.categories.join('.'));
-    // console.log('Cover file:', values.cover?.[0]?.name);
-    // console.log('Cover URL:', values.coverUrl);
 
     // TODO: Implement actual API call
     if (initialData?.id) {
@@ -291,10 +292,13 @@ export default function ArticlesForm({
                 <FormItem>
                   <FormLabel>Content</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder='Enter article content'
-                      className='min-h-[120px] resize-none'
-                      {...field}
+                    <RichTextEditor
+                      value={field.value}
+                      onChange={(value) => {
+                        field.onChange(value);
+                      }}
+                      placeholder='Enter article content...'
+                      className='min-h-[200px]'
                     />
                   </FormControl>
                   <FormMessage />
