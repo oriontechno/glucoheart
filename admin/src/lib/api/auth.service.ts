@@ -44,8 +44,6 @@ export const authService = {
 
       const data = await response.json();
 
-      console.log({ data });
-
       if (!response.ok) {
         throw {
           error: data.error || 'Login failed',
@@ -58,8 +56,6 @@ export const authService = {
         method: 'GET',
         credentials: 'include'
       });
-
-      console.log({ sessionResponse });
 
       if (sessionResponse.ok) {
         const sessionData = await sessionResponse.json();
