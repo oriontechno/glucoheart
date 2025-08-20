@@ -545,4 +545,133 @@ export class ChatService {
       throw new InternalServerErrorException('Failed to assign nurse');
     }
   }
+
+  // ================================================================
+  // =============   ADMIN/SUPPORT READ ALL MESSAGES   =============
+  // ================================================================
+  async adminFetchMessages(
+    acting: Acting,
+    sessionId: number,
+    opts: { page?: number; limit?: number } = {},
+  ) {
+    this.assertAdmin(acting.role);
+
+    // pastikan session ada
+    const [sess] = await this.db
+      .select({ id: chatSessions.id })
+      .from(chatSessions)
+      .where(eq(chatSessions.id, sessionId))
+      .limit(1);
+    if (!sess) throw new NotFoundException('Session not found');
+
+    const page = Math.max(1, Number(opts.page) || 1);
+    const limit = Math.min(200, Math.max(1, Number(opts.limit) || 50));
+    const offset = (page - 1) * limit;
+
+    // total
+    const [{ total }] = await this.db
+      .select({ total: sql<number>`count(*)::int` })
+      .from(messages)
+      .where(eq(messages.sessionId, sessionId));
+
+    // fetch messages + info pengirim
+    const sender = users; // no alias needed
+    const rows = await this.db
+      .select({
+        id: messages.id,
+        sessionId: messages.sessionId,
+        senderId: messages.senderId,
+        content: messages.content,
+        createdAt: messages.createdAt,
+        firstName: sender.firstName,
+        lastName: sender.lastName,
+        email: sender.email,
+        role: sender.role,
+      })
+      .from(messages)
+      .innerJoin(sender, eq(sender.id, messages.senderId))
+      .where(eq(messages.sessionId, sessionId))
+      .orderBy(messages.createdAt) // ASC (dari lama ke baru)
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      sessionId,
+      total,
+      page,
+      limit,
+      messages: rows.map((m) => ({
+        id: m.id,
+        sessionId: m.sessionId,
+        content: m.content,
+        created_at: m.createdAt,
+        sender: {
+          id: m.senderId,
+          firstName: m.firstName,
+          lastName: m.lastName,
+          email: m.email,
+          role: m.role, // global role user
+        },
+      })),
+    };
+  }
+
+  // ================================================================
+  // =============   ADMIN/SUPPORT SEND TO ANY SESSION   ============
+  // ================================================================
+  async adminSendMessage(
+    acting: Acting,
+    sessionId: number,
+    dto: { content: string },
+  ) {
+    this.assertAdmin(acting.role);
+
+    if (!dto?.content || !dto.content.trim()) {
+      throw new BadRequestException('content is required');
+    }
+
+    // pastikan session ada
+    const [sess] = await this.db
+      .select()
+      .from(chatSessions)
+      .where(eq(chatSessions.id, sessionId))
+      .limit(1);
+    if (!sess) throw new NotFoundException('Session not found');
+
+    // insert message atas nama admin/support (meskipun bukan participant)
+    const now = new Date();
+    const [msg] = await this.db
+      .insert(messages)
+      .values({
+        sessionId,
+        senderId: acting.id,
+        content: dto.content.trim(),
+        createdAt: now, // jika kolom ada default now() juga tidak masalah
+      } as any)
+      .returning();
+
+    // update timestamp session untuk menggelembungkan ke atas di listing
+    await this.db
+      .update(chatSessions)
+      .set({ updatedAt: new Date() } as any)
+      .where(eq(chatSessions.id, sessionId));
+
+    // (opsional) emit notifikasi via gateway/ws
+    // this.gateway?.emitToSession(sessionId, 'chat.message', {
+    //   id: msg.id, sessionId, senderId: acting.id, content: msg.content, createdAt: msg.createdAt
+    // });
+
+    return {
+      ok: true,
+      message: {
+        id: msg.id,
+        sessionId,
+        senderId: acting.id,
+        content: msg.content,
+        createdAt: msg.createdAt,
+      },
+    };
+  }
 }

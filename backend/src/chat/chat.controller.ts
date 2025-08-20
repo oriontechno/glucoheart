@@ -26,15 +26,37 @@ import { RequestUser } from './types';
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
 
-  // POST /chat/session : create/get 1:1 session by concrete userId
-  // @Post('session')
-  // async createOrGetSession(
-  //   @Req() req: Request & { user: RequestUser },
-  //   @Body() dto: CreateSessionDto,
-  // ) {
-  //   const { user } = req; // Ensure your AuthGuard sets req.user
-  //   return this.chat.getOrCreateOneToOneSession(user.id, dto);
-  // }
+  // ========== ADMIN/SUPPORT: Read messages dari sesi mana pun ==========
+  @Get('admin/sessions/:sessionId/messages')
+  async adminFetchMessages(
+    @Req() req: Request & { user: RequestUser },
+    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    return this.chat.adminFetchMessages(
+      { id: req.user.id, role: req.user.role },
+      sessionId,
+      {
+        page: Number(page) || 1,
+        limit: Math.min(200, Math.max(1, Number(limit) || 50)),
+      },
+    );
+  }
+
+  // ========== ADMIN/SUPPORT: Kirim pesan ke sesi mana pun ==========
+  @Post('admin/sessions/:sessionId/message')
+  async adminSendMessage(
+    @Req() req: Request & { user: RequestUser },
+    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Body() dto: { content: string },
+  ) {
+    return this.chat.adminSendMessage(
+      { id: req.user.id, role: req.user.role },
+      sessionId,
+      dto,
+    );
+  }
 
   // POST /chat/session/by-role : create/get 1:1 session targeting a role (ADMIN/SUPPORT)
   @Post('session')
