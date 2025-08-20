@@ -80,29 +80,22 @@ export default async function ChatSessionsListing() {
     ...(sort && { sort })
   };
 
-  try {
-    // Fetch data dari API
-    const chatSessionsResponse =
-      await ChatSessionsServerService.getChatSessions(filters);
+  // Fetch data dari API
+  const chatSessionsResponse =
+    await ChatSessionsServerService.getChatSessions(filters);
 
-    let sessions: ChatSession[] = [];
+  let sessions: ChatSession[] = [];
 
-    if (chatSessionsResponse.success && chatSessionsResponse.data.sessions) {
-      // Convert API data ke format yang diharapkan komponen
-      sessions = chatSessionsResponse.data.sessions.map(
-        convertAPISessionToClientSession
-      );
-    }
-
-    // TODO: Get current user from session/auth
-    // const currentUser = await authService.getCurrentUser();
-    const currentUser = mockCurrentUser;
-
-    return <ChatSessionsLayout sessions={sessions} currentUser={currentUser} />;
-  } catch (error) {
-    console.error('Error fetching chat sessions:', error);
-
-    // Fallback ke empty state atau error state
-    return <ChatSessionsLayout sessions={[]} currentUser={mockCurrentUser} />;
+  if (chatSessionsResponse.success && chatSessionsResponse.data.sessions) {
+    // Convert API data ke format yang diharapkan komponen
+    sessions = chatSessionsResponse.data.sessions.map(
+      convertAPISessionToClientSession
+    );
   }
+
+  // TODO: Get current user from session/auth
+  // const currentUser = await authService.getCurrentUser();
+  const currentUser = mockCurrentUser;
+
+  return <ChatSessionsLayout sessions={sessions} currentUser={currentUser} />;
 }
