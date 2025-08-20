@@ -55,13 +55,13 @@ export default function ChatSessionList({
   };
 
   return (
-    <Card className='flex h-full flex-col gap-2 p-0'>
+    <Card className='flex h-full max-h-[calc(100vh-8rem)] flex-col gap-2 p-0'>
       <div className='shrink-0 border-b p-4'>
         <h2 className='text-lg font-semibold'>Chat Sessions</h2>
       </div>
-      <div className='flex-1 overflow-hidden'>
-        <ScrollArea className='h-full'>
-          <div className='space-y-2 px-2'>
+      <div className='flex-1 overflow-hidden relative'>
+        <ScrollArea className='h-full max-h-[calc(100vh-12rem)]'>
+          <div className='space-y-2 px-2 pb-2'>
             {sessions.map((session) => {
               const otherParticipant = getOtherParticipant(session);
               const isSelected = selectedSessionId === session.id;
@@ -70,8 +70,8 @@ export default function ChatSessionList({
                 <div
                   key={session.id}
                   className={cn(
-                    'hover:bg-muted/50 cursor-pointer rounded-lg p-3 transition-colors',
-                    isSelected && 'bg-muted'
+                    'hover:bg-muted/50 cursor-pointer rounded-lg p-3 transition-all duration-200 hover:shadow-sm',
+                    isSelected && 'bg-muted shadow-sm'
                   )}
                   onClick={() => onSessionSelect(session.id)}
                 >
@@ -132,6 +132,8 @@ export default function ChatSessionList({
             )}
           </div>
         </ScrollArea>
+        {/* Gradient fade untuk indikasi scroll */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-background to-transparent" />
       </div>
     </Card>
   );

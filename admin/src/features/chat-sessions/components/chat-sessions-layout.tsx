@@ -20,9 +20,9 @@ export default function ChatSessionsLayout({
     sessions.find((s) => s.id === selectedSessionId) || null;
 
   return (
-    <div className='grid h-full max-h-full grid-cols-1 gap-4 lg:grid-cols-3'>
+    <div className='grid h-full max-h-[calc(100vh-8rem)] grid-cols-1 gap-4 lg:grid-cols-3'>
       {/* Chat Session List - Left Side */}
-      <div className='max-h-full lg:col-span-1'>
+      <div className='max-h-full overflow-hidden lg:col-span-1'>
         <ChatSessionList
           sessions={sessions}
           selectedSessionId={selectedSessionId}
@@ -32,7 +32,7 @@ export default function ChatSessionsLayout({
       </div>
 
       {/* Chat Content - Right Side */}
-      <div className='max-h-full lg:col-span-2'>
+      <div className='max-h-full overflow-hidden lg:col-span-2'>
         {/* <ChatContent session={selectedSession} currentUser={currentUser} /> */}
       </div>
     </div>
