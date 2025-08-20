@@ -10,8 +10,6 @@ export async function GET() {
       sessionOptions
     );
 
-    console.log({ session });
-
     if (!session.isLoggedIn || !session.user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }

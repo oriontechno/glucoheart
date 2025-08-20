@@ -21,6 +21,8 @@ export async function POST(request: NextRequest) {
       password
     });
 
+    console.log({ response: response.data });
+
     const { access_token, user } = response.data;
 
     // Get session
