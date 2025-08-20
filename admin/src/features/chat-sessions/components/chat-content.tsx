@@ -111,7 +111,7 @@ export default function ChatContent({
   const otherParticipant = getOtherParticipant();
 
   return (
-    <Card className='flex h-full max-h-[calc(100vh-8rem)] flex-col'>
+    <Card className='flex h-full max-h-[calc(100vh-8rem)] flex-col gap-0 py-0'>
       {/* Chat Header - Fixed */}
       <div className='bg-card shrink-0 border-b p-4'>
         <div className='flex items-center space-x-3'>
