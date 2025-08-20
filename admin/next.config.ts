@@ -17,6 +17,12 @@ const baseConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: '*'
+      },
+      {
+        protocol: 'http',
+        hostname: '195.88.211.126',
+        port: '3001',
+        pathname: '/uploads/articles/**'
       }
     ]
   },
