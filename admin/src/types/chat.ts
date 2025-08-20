@@ -8,11 +8,29 @@ export interface ChatSession {
   assignedNurseId?: number;
   lastMessageId?: number;
   lastMessageAt?: string;
-  createdAt: string;
-  updatedAt: string;
-  participants?: ChatParticipant[];
+  lastMessage?: Message | string; // API bisa mengirim string atau object Message
+  nurse?: {
+    id: number;
+    firstName: string;
+    lastName?: string | null;
+    email: string;
+  };
+  created_at?: string; // API menggunakan snake_case
+  updated_at?: string; // API menggunakan snake_case
+  createdAt?: string; // Tetap support camelCase untuk compatibility
+  updatedAt?: string; // Tetap support camelCase untuk compatibility
+  participants?: (ChatParticipantAPI | ChatParticipant)[];
   messages?: Message[];
-  lastMessage?: Message;
+}
+
+export interface ChatParticipantAPI {
+  userId: number;
+  email: string;
+  firstName: string;
+  lastName?: string | null;
+  role: 'member' | 'nurse';
+  userRole: 'USER' | 'NURSE' | 'ADMIN' | 'SUPPORT';
+  joinedAt: string;
 }
 
 export interface ChatParticipant {

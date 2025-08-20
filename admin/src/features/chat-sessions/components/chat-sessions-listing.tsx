@@ -1,25 +1,62 @@
 import { searchParamsCache } from '@/lib/searchparams';
 import ChatSessionsLayout from './chat-sessions-layout';
-import { ChatSession, ChatUser } from '@/types/chat';
+import { ChatSession, ChatUser, ChatParticipantAPI } from '@/types/chat';
 import { faker } from '@faker-js/faker';
 import { ChatSessionsServerService } from '@/lib/api/chat-sessions.server.service';
 
-type ChatSessionsListingProps = {};
+// Helper function to convert API data to expected format
+const convertAPISessionToClientSession = (apiSession: any): ChatSession => {
+  // Convert participants dari format API ke format yang diharapkan komponen
+  const convertedParticipants =
+    apiSession.participants?.map((participant: ChatParticipantAPI) => ({
+      id: participant.userId, // Use userId as id for compatibility
+      sessionId: apiSession.id,
+      userId: participant.userId,
+      role: participant.role,
+      joinedAt: participant.joinedAt,
+      user: {
+        id: participant.userId,
+        firstName: participant.firstName || 'Unknown',
+        lastName: participant.lastName || '',
+        email: participant.email || '',
+        role: participant.userRole || 'USER',
+        profilePicture: faker.image.avatar() // Generate avatar since API doesn't provide
+      }
+    })) || [];
 
-// Helper function to generate mock user
-const generateMockUser = (
-  id: number,
-  role: 'USER' | 'NURSE' | 'ADMIN' | 'SUPPORT'
-): ChatUser => ({
-  id,
-  firstName: faker.person.firstName(),
-  lastName: faker.person.lastName(),
-  email: faker.internet.email(),
-  role,
-  profilePicture: faker.image.avatar()
-});
+  // Handle lastMessage - API mengirim string, komponen expect Message object
+  let lastMessageObj = undefined;
+  if (
+    typeof apiSession.lastMessage === 'string' &&
+    apiSession.lastMessage.trim()
+  ) {
+    lastMessageObj = {
+      id: 0, // API tidak memberikan ID untuk last message
+      sessionId: apiSession.id,
+      senderId: 0, // API tidak memberikan sender ID
+      content: apiSession.lastMessage,
+      createdAt: apiSession.lastMessageAt || new Date().toISOString(),
+      sender: undefined // Akan di-resolve nanti jika diperlukan
+    };
+  }
 
-// Mock current user
+  return {
+    id: apiSession.id,
+    type: apiSession.type || 'one_to_one',
+    assignedNurseId: apiSession.assignedNurseId,
+    lastMessageAt: apiSession.lastMessageAt || new Date().toISOString(),
+    createdAt:
+      apiSession.created_at || apiSession.createdAt || new Date().toISOString(),
+    updatedAt:
+      apiSession.updated_at || apiSession.updatedAt || new Date().toISOString(),
+    nurse: apiSession.nurse || undefined,
+    participants: convertedParticipants,
+    lastMessage: lastMessageObj,
+    messages: [] // Messages akan di-load terpisah ketika session dipilih
+  };
+};
+
+// Mock current user - ini bisa di-replace dengan data dari session/auth
 const mockCurrentUser: ChatUser = {
   id: 1,
   firstName: 'Admin',
@@ -29,110 +66,7 @@ const mockCurrentUser: ChatUser = {
   profilePicture: faker.image.avatar()
 };
 
-// Generate mock sessions with faker
-const generateMockSessions = (): ChatSession[] => {
-  const sessions: ChatSession[] = [];
-  const roles: ('USER' | 'NURSE' | 'SUPPORT')[] = ['USER', 'NURSE', 'SUPPORT'];
-
-  for (let i = 1; i <= 15; i++) {
-    const otherUserRole = faker.helpers.arrayElement(roles);
-    const otherUser = generateMockUser(i + 100, otherUserRole);
-    const nurseUser =
-      otherUserRole === 'NURSE'
-        ? otherUser
-        : generateMockUser(i + 200, 'NURSE');
-
-    // Generate messages for this session
-    const messageCount = faker.number.int({ min: 1, max: 10 });
-    const messages = [];
-
-    for (let j = 1; j <= messageCount; j++) {
-      const isFromOtherUser = faker.datatype.boolean();
-      const sender = isFromOtherUser ? otherUser : mockCurrentUser;
-
-      const healthTopics = [
-        'Mohon untuk tetap menjaga profesionalitas dalam konsultasi',
-        'Terima kasih atas bantuan dan sarannya',
-        'Belum, hanya pakai tensimeter rumahan',
-        'Bagus sekali! Diet rendah garam dan lemak jenuh sangat penting. Hindari makanan olahan dan perbanyak sayuran',
-        'Selamat sore! Saya siap membantu. Usia kandungan berapa sekarang?',
-        'Selamat siang! Obat apa yang dimaksud?',
-        'Sudah coba minum air hangat dan istirahat yang cukup?',
-        'Apakah ada gejala demam atau mual?',
-        'Saya akan jadwalkan konsultasi lanjutan minggu depan',
-        'Terima kasih sudah konsultasi. Jangan lupa kontrol rutin ya'
-      ];
-
-      messages.push({
-        id: i * 100 + j,
-        sessionId: i,
-        senderId: sender.id,
-        content: faker.helpers.arrayElement(healthTopics),
-        createdAt: faker.date.recent({ days: 7 }).toISOString(),
-        sender
-      });
-    }
-
-    // Sort messages by creation time
-    messages.sort(
-      (a, b) =>
-        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-    );
-
-    const session: ChatSession = {
-      id: i,
-      type: 'one_to_one',
-      userAId: mockCurrentUser.id,
-      userBId: otherUser.id,
-      assignedNurseId: nurseUser.id,
-      lastMessageAt:
-        messages[messages.length - 1]?.createdAt ||
-        faker.date.recent({ days: 1 }).toISOString(),
-      createdAt: faker.date.recent({ days: 30 }).toISOString(),
-      updatedAt: faker.date.recent({ days: 1 }).toISOString(),
-      participants: [
-        {
-          id: i * 10 + 1,
-          sessionId: i,
-          userId: mockCurrentUser.id,
-          role: 'member',
-          joinedAt: faker.date.recent({ days: 30 }).toISOString(),
-          user: mockCurrentUser
-        },
-        {
-          id: i * 10 + 2,
-          sessionId: i,
-          userId: otherUser.id,
-          role: 'member',
-          joinedAt: faker.date.recent({ days: 30 }).toISOString(),
-          user: otherUser
-        },
-        {
-          id: i * 10 + 3,
-          sessionId: i,
-          userId: nurseUser.id,
-          role: 'nurse',
-          joinedAt: faker.date.recent({ days: 30 }).toISOString(),
-          user: nurseUser
-        }
-      ],
-      messages,
-      lastMessage: messages[messages.length - 1] || null
-    };
-
-    sessions.push(session);
-  }
-
-  return sessions.sort(
-    (a, b) =>
-      new Date(b.lastMessageAt || 0).getTime() -
-      new Date(a.lastMessageAt || 0).getTime()
-  );
-};
-
-const mockSessions = generateMockSessions();
-
-export default async function ChatSessionsListing({}: ChatSessionsListingProps) {
+export default async function ChatSessionsListing() {
   // Get search params
   const page = searchParamsCache.get('page');
   const search = searchParamsCache.get('search');
@@ -146,22 +80,29 @@ export default async function ChatSessionsListing({}: ChatSessionsListingProps) 
     ...(sort && { sort })
   };
 
-  // TODO: Uncomment ketika API sudah siap
-  const chatSessionsResponse =
-    await ChatSessionsServerService.getChatSessions(filters);
-  const sessionsFromAPI: ChatSession[] = chatSessionsResponse.success
-    ? chatSessionsResponse.data.sessions || []
-    : [];
+  try {
+    // Fetch data dari API
+    const chatSessionsResponse =
+      await ChatSessionsServerService.getChatSessions(filters);
 
-  console.log({ sessionsFromAPI });
-  console.log({ participants: sessionsFromAPI[0]?.participants });
+    let sessions: ChatSession[] = [];
 
-  // TODO: Get current user from session
-  // const currentUser = await authService.getCurrentUser();
+    if (chatSessionsResponse.success && chatSessionsResponse.data.sessions) {
+      // Convert API data ke format yang diharapkan komponen
+      sessions = chatSessionsResponse.data.sessions.map(
+        convertAPISessionToClientSession
+      );
+    }
 
-  // Sementara menggunakan mock data
-  const sessions = mockSessions;
-  const currentUser = mockCurrentUser;
+    // TODO: Get current user from session/auth
+    // const currentUser = await authService.getCurrentUser();
+    const currentUser = mockCurrentUser;
 
-  return <ChatSessionsLayout sessions={sessions} currentUser={currentUser} />;
+    return <ChatSessionsLayout sessions={sessions} currentUser={currentUser} />;
+  } catch (error) {
+    console.error('Error fetching chat sessions:', error);
+
+    // Fallback ke empty state atau error state
+    return <ChatSessionsLayout sessions={[]} currentUser={mockCurrentUser} />;
+  }
 }

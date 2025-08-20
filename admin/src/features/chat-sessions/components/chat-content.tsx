@@ -9,7 +9,12 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
-import { ChatSession, Message, ChatUser } from '@/types/chat';
+import {
+  ChatSession,
+  Message,
+  ChatUser,
+  ChatParticipantAPI
+} from '@/types/chat';
 import { cn } from '@/lib/utils';
 
 interface ChatContentProps {
@@ -86,13 +91,64 @@ export default function ChatContent({
   };
 
   const getOtherParticipant = (): ChatUser | null => {
-    if (!session?.participants) return null;
+    if (!session?.participants || session.participants.length === 0) {
+      console.log('No participants found in session:', session?.id);
+      return null;
+    }
 
-    const otherParticipant = session.participants.find(
-      (p) => p.userId !== currentUser.id
-    );
+    // Debug log
+    console.log('Session participants:', session.participants);
+    console.log('Current user ID:', currentUser.id);
 
-    return otherParticipant?.user || null;
+    // Filter out current user and get the first other participant
+    const otherParticipant = session.participants.find((p) => {
+      // Handle both API format (ChatParticipantAPI) and converted format (ChatParticipant)
+      if ('user' in p) {
+        // Converted format - has user property
+        return p.userId !== currentUser.id;
+      } else {
+        // API format - direct participant data
+        return (p as ChatParticipantAPI).userId !== currentUser.id;
+      }
+    });
+
+    if (!otherParticipant) {
+      console.log('No other participant found besides current user');
+      return null;
+    }
+
+    console.log('Found other participant:', otherParticipant);
+
+    // Return user data based on format
+    if ('user' in otherParticipant && otherParticipant.user) {
+      // Converted format - return the user object
+      console.log(
+        'Using converted format, returning user:',
+        otherParticipant.user
+      );
+      return otherParticipant.user;
+    } else {
+      // API format - convert participant to ChatUser
+      const apiParticipant = otherParticipant as ChatParticipantAPI;
+
+      // Safety check for required fields
+      if (!apiParticipant.userId) {
+        console.log('API participant missing userId');
+        return null;
+      }
+
+      const convertedUser = {
+        id: apiParticipant.userId,
+        firstName: apiParticipant.firstName || 'Unknown',
+        lastName: apiParticipant.lastName || '',
+        email: apiParticipant.email || '',
+        role: apiParticipant.userRole || 'USER',
+        profilePicture: undefined // API doesn't provide profile picture
+      };
+
+      console.log('Using API format, converted to user:', convertedUser);
+      return convertedUser;
+    }
   };
 
   if (!session) {
@@ -109,6 +165,20 @@ export default function ChatContent({
   }
 
   const otherParticipant = getOtherParticipant();
+
+  // Show fallback if no other participant found
+  if (!otherParticipant) {
+    return (
+      <Card className='flex h-full items-center justify-center'>
+        <div className='text-muted-foreground text-center'>
+          <h3 className='text-lg font-medium'>Unable to load chat</h3>
+          <p className='text-sm'>
+            This chat session appears to have no participants
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className='flex h-full max-h-[calc(100vh-8rem)] flex-col gap-0 py-0'>

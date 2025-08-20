@@ -26,11 +26,37 @@ export default function ChatSessionList({
     if (!session.participants) return null;
 
     // Find the participant who is not the current user
-    const otherParticipant = session.participants.find(
-      (p) => p.userId !== currentUser.id
-    );
+    const otherParticipant = session.participants.find((p) => {
+      // Handle both API format (ChatParticipantAPI) and converted format (ChatParticipant)
+      if ('user' in p) {
+        // Converted format
+        return p.userId !== currentUser.id;
+      } else {
+        // API format
+        return (p as any).userId !== currentUser.id;
+      }
+    });
 
-    return otherParticipant?.user || null;
+    // Return user data based on format
+    if (otherParticipant) {
+      if ('user' in otherParticipant) {
+        // Converted format
+        return otherParticipant.user || null;
+      } else {
+        // API format - convert to ChatUser
+        const apiParticipant = otherParticipant as any;
+        return {
+          id: apiParticipant.userId,
+          firstName: apiParticipant.firstName,
+          lastName: apiParticipant.lastName,
+          email: apiParticipant.email,
+          role: apiParticipant.userRole,
+          profilePicture: undefined // API doesn't provide profile picture
+        };
+      }
+    }
+
+    return null;
   };
 
   const getRoleColor = (role: string) => {
@@ -116,7 +142,9 @@ export default function ChatSessionList({
 
                       {session.lastMessage && (
                         <p className='text-muted-foreground mt-1 line-clamp-2 text-sm leading-relaxed'>
-                          {session.lastMessage.content}
+                          {typeof session.lastMessage === 'string'
+                            ? session.lastMessage
+                            : session.lastMessage.content}
                         </p>
                       )}
                     </div>
