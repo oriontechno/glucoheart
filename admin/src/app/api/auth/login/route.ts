@@ -31,10 +31,16 @@ export async function POST(request: NextRequest) {
       sessionOptions
     );
 
+    console.log('Session data sebelum disimpan:');
+    console.log({ session });
+
     // Store session data
     session.access_token = access_token;
     session.user = user;
     session.isLoggedIn = true;
+
+    console.log('Session data setelah disimpan:');
+    console.log({ session });
 
     await session.save();
 
