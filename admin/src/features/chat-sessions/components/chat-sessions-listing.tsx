@@ -2,6 +2,7 @@ import { searchParamsCache } from '@/lib/searchparams';
 import ChatSessionsLayout from './chat-sessions-layout';
 import { ChatSession, ChatUser } from '@/types/chat';
 import { faker } from '@faker-js/faker';
+import { ChatSessionsServerService } from '@/lib/api/chat-sessions.server.service';
 
 type ChatSessionsListingProps = {};
 
@@ -146,10 +147,14 @@ export default async function ChatSessionsListing({}: ChatSessionsListingProps) 
   };
 
   // TODO: Uncomment ketika API sudah siap
-  // const chatSessionsResponse = await ChatSessionsServerService.getChatSessions(filters);
-  // const sessions: ChatSession[] = chatSessionsResponse.success
-  //   ? chatSessionsResponse.data.sessions || []
-  //   : [];
+  const chatSessionsResponse =
+    await ChatSessionsServerService.getChatSessions(filters);
+  const sessionsFromAPI: ChatSession[] = chatSessionsResponse.success
+    ? chatSessionsResponse.data.sessions || []
+    : [];
+
+  console.log({ sessionsFromAPI });
+  console.log({ participants: sessionsFromAPI[0]?.participants });
 
   // TODO: Get current user from session
   // const currentUser = await authService.getCurrentUser();

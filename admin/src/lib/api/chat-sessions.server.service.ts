@@ -30,21 +30,18 @@ export class ChatSessionsServerService {
     } = {}
   ) {
     try {
-      console.log('🔄 Fetching chat sessions...');
       const authConfig = await this.getAuthenticatedRequest();
 
-      const response = await api.get('/chat-sessions', {
+      const response = await api.get('/chat/sessions/admin', {
         params: filters,
         ...authConfig
       });
 
-      console.log('✅ Chat sessions fetched successfully');
       return {
         success: true,
         data: response.data
       };
     } catch (error: any) {
-      console.error('❌ Failed to fetch chat sessions:', error);
       return {
         success: false,
         error: error.message || 'Failed to fetch chat sessions',
@@ -58,20 +55,17 @@ export class ChatSessionsServerService {
 
   static async getChatSessionMessages(sessionId: number) {
     try {
-      console.log('🔄 Fetching messages for session:', sessionId);
       const authConfig = await this.getAuthenticatedRequest();
 
       const response = await api.get(`/chat-sessions/${sessionId}/messages`, {
         ...authConfig
       });
 
-      console.log('✅ Messages fetched successfully');
       return {
         success: true,
         data: response.data
       };
     } catch (error: any) {
-      console.error('❌ Failed to fetch messages:', error);
       return {
         success: false,
         error: error.message || 'Failed to fetch messages',
@@ -84,7 +78,6 @@ export class ChatSessionsServerService {
 
   static async sendMessage(sessionId: number, content: string) {
     try {
-      console.log('🔄 Sending message to session:', sessionId);
       const authConfig = await this.getAuthenticatedRequest();
 
       const response = await api.post(
@@ -93,13 +86,11 @@ export class ChatSessionsServerService {
         authConfig
       );
 
-      console.log('✅ Message sent successfully');
       return {
         success: true,
         data: response.data
       };
     } catch (error: any) {
-      console.error('❌ Failed to send message:', error);
       return {
         success: false,
         error: error.message || 'Failed to send message',
