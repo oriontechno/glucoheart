@@ -59,7 +59,7 @@ export default function ChatSessionList({
       <div className='shrink-0 border-b p-4'>
         <h2 className='text-lg font-semibold'>Chat Sessions</h2>
       </div>
-      <div className='flex-1 overflow-hidden relative'>
+      <div className='relative flex-1 overflow-hidden'>
         <ScrollArea className='h-full max-h-[calc(100vh-12rem)]'>
           <div className='space-y-2 px-2 pb-2'>
             {sessions.map((session) => {
@@ -133,7 +133,7 @@ export default function ChatSessionList({
           </div>
         </ScrollArea>
         {/* Gradient fade untuk indikasi scroll */}
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-6 bg-gradient-to-t from-background to-transparent" />
+        <div className='from-background pointer-events-none absolute right-0 bottom-0 left-0 h-6 bg-gradient-to-t to-transparent' />
       </div>
     </Card>
   );
