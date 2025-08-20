@@ -33,7 +33,7 @@ export default function ChatSessionsLayout({
 
       {/* Chat Content - Right Side */}
       <div className='max-h-full lg:col-span-2'>
-        <ChatContent session={selectedSession} currentUser={currentUser} />
+        {/* <ChatContent session={selectedSession} currentUser={currentUser} /> */}
       </div>
     </div>
   );

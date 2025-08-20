@@ -1,6 +1,4 @@
 import { searchParamsCache } from '@/lib/searchparams';
-import { ChatSessionsServerService } from '@/lib/api/chat-sessions.server.service';
-import { authService } from '@/lib/api/auth.service';
 import ChatSessionsLayout from './chat-sessions-layout';
 import { ChatSession, ChatUser } from '@/types/chat';
 

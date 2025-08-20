@@ -55,13 +55,13 @@ export default function ChatSessionList({
   };
 
   return (
-    <Card className='flex max-h-full flex-col'>
+    <Card className='flex h-full flex-col gap-2 p-0'>
       <div className='shrink-0 border-b p-4'>
         <h2 className='text-lg font-semibold'>Chat Sessions</h2>
       </div>
-      <div className='min-h-0 flex-1 overflow-hidden'>
-        <ScrollArea className='h-full max-h-[60vh]'>
-          <div className='space-y-2 p-2'>
+      <div className='flex-1 overflow-hidden'>
+        <ScrollArea className='h-full'>
+          <div className='space-y-2 px-2'>
             {sessions.map((session) => {
               const otherParticipant = getOtherParticipant(session);
               const isSelected = selectedSessionId === session.id;
