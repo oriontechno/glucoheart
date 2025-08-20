@@ -30,7 +30,7 @@ export default async function Page(props: pageProps) {
       </div>
 
       {/* Chat Content Area - Flexible Height */}
-      <div className='max-h-[75vh] flex-1 overflow-hidden p-4 md:px-6'>
+      <div className='max-h-[82vh] flex-1 overflow-hidden p-4 md:px-6'>
         <Suspense
           fallback={
             <DataTableSkeleton columnCount={3} rowCount={6} filterCount={1} />
