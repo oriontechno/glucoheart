@@ -23,6 +23,10 @@ export const createArticleColumnsFromConfig = (
     accessorKey: 'coverImageUrl',
     header: 'IMAGE',
     cell: ({ row }) => {
+      console.log({ row: row.getValue('coverImageUrl') });
+      console.log({
+        fullImageURL: `${envConfig.API_URL}${row.getValue('coverImageUrl')}`
+      });
       return (
         <div className='relative aspect-square overflow-hidden'>
           <Image
