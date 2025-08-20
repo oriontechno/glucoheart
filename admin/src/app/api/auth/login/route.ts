@@ -44,6 +44,26 @@ export async function POST(request: NextRequest) {
 
     await session.save();
 
+    // Debug environment dan cookie settings
+    console.log('Environment Debug:', {
+      NODE_ENV: process.env.NODE_ENV,
+      USE_HTTPS: process.env.USE_HTTPS,
+      isProduction: process.env.NODE_ENV === 'production',
+      useHTTPS: process.env.USE_HTTPS === 'true',
+      cookieOptions: {
+        secure:
+          process.env.NODE_ENV === 'production' &&
+          process.env.USE_HTTPS === 'true',
+        sameSite:
+          process.env.NODE_ENV === 'production' &&
+          !(process.env.USE_HTTPS === 'true')
+            ? 'lax'
+            : process.env.NODE_ENV === 'production'
+              ? 'none'
+              : 'lax'
+      }
+    });
+
     return NextResponse.json({
       success: true,
       user

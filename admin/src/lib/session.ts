@@ -18,14 +18,25 @@ export const defaultSession: SessionData = {
   isLoggedIn: false
 };
 
+// Deteksi environment untuk konfigurasi cookie yang tepat
+const isProduction = process.env.NODE_ENV === 'production';
+const useHTTPS = process.env.USE_HTTPS === 'true';
+const isVPSWithHTTP = isProduction && !useHTTPS;
+
 export const sessionOptions: SessionOptions = {
   password: config.SESSION_SECRET || '',
   cookieName: 'glucoheart-session',
   cookieOptions: {
-    secure: process.env.NODE_ENV === 'production',
+    // Hanya secure jika production dan menggunakan HTTPS
+    secure: isProduction && useHTTPS,
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 7, // 7 days
-    sameSite: 'lax',
-    path: '/'
+    // Sesuaikan sameSite berdasarkan environment
+    sameSite: isVPSWithHTTP ? 'lax' : isProduction ? 'none' : 'lax',
+    path: '/',
+    // Tidak set domain untuk fleksibilitas IP address
+    ...(isVPSWithHTTP && {
+      domain: undefined
+    })
   }
 };
