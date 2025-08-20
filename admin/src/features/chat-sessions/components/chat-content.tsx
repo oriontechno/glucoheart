@@ -92,13 +92,8 @@ export default function ChatContent({
 
   const getOtherParticipant = (): ChatUser | null => {
     if (!session?.participants || session.participants.length === 0) {
-      console.log('No participants found in session:', session?.id);
       return null;
     }
-
-    // Debug log
-    console.log('Session participants:', session.participants);
-    console.log('Current user ID:', currentUser.id);
 
     // Filter out current user and get the first other participant
     const otherParticipant = session.participants.find((p) => {
@@ -113,19 +108,12 @@ export default function ChatContent({
     });
 
     if (!otherParticipant) {
-      console.log('No other participant found besides current user');
       return null;
     }
-
-    console.log('Found other participant:', otherParticipant);
 
     // Return user data based on format
     if ('user' in otherParticipant && otherParticipant.user) {
       // Converted format - return the user object
-      console.log(
-        'Using converted format, returning user:',
-        otherParticipant.user
-      );
       return otherParticipant.user;
     } else {
       // API format - convert participant to ChatUser
@@ -133,7 +121,6 @@ export default function ChatContent({
 
       // Safety check for required fields
       if (!apiParticipant.userId) {
-        console.log('API participant missing userId');
         return null;
       }
 
@@ -146,7 +133,6 @@ export default function ChatContent({
         profilePicture: undefined // API doesn't provide profile picture
       };
 
-      console.log('Using API format, converted to user:', convertedUser);
       return convertedUser;
     }
   };
