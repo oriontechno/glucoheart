@@ -22,15 +22,29 @@ export default function ChatContent({
   currentUser
 }: ChatContentProps) {
   const [newMessage, setNewMessage] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to bottom when messages change
+  // Auto scroll to bottom when messages change or session changes or typing state changes
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [session?.messages]);
+    const timer = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [session?.messages, session?.id, isTyping]);
 
   const handleSendMessage = () => {
     if (!newMessage.trim() || !session) return;
+
+    // Simulate typing response from other user
+    setTimeout(() => {
+      setIsTyping(true);
+      setTimeout(() => {
+        setIsTyping(false);
+      }, 2000);
+    }, 500);
 
     // Clear input after "sending"
     setNewMessage('');
@@ -97,7 +111,7 @@ export default function ChatContent({
   const otherParticipant = getOtherParticipant();
 
   return (
-    <Card className='flex max-h-full flex-col'>
+    <Card className='flex h-full max-h-[calc(100vh-8rem)] flex-col'>
       {/* Chat Header - Fixed */}
       <div className='bg-card shrink-0 border-b p-4'>
         <div className='flex items-center space-x-3'>
@@ -134,76 +148,148 @@ export default function ChatContent({
       </div>
 
       {/* Messages Area - Scrollable with flexible height */}
-      <div className='min-h-0 flex-1 overflow-hidden'>
-        <ScrollArea className='h-full max-h-[50vh]'>
-          <div className='space-y-4 p-4'>
-            {session.messages?.map((message) => {
-              const isFromCurrentUser = message.senderId === currentUser.id;
-              const sender = message.sender;
+      <div className='relative flex-1 overflow-hidden'>
+        <ScrollArea
+          ref={scrollAreaRef}
+          className='h-full max-h-[calc(100vh-16rem)]'
+        >
+          <div className='space-y-4 p-4 pb-6'>
+            {session.messages && session.messages.length > 0 ? (
+              session.messages.map((message, index) => {
+                const isCurrentUser = message.senderId === currentUser.id;
+                const showAvatar =
+                  index === 0 ||
+                  session.messages![index - 1]?.senderId !== message.senderId;
 
-              return (
-                <div
-                  key={message.id}
-                  className={cn(
-                    'flex',
-                    isFromCurrentUser ? 'justify-end' : 'justify-start'
-                  )}
-                >
+                return (
                   <div
+                    key={message.id}
                     className={cn(
-                      'max-w-[70%] rounded-lg p-3',
-                      isFromCurrentUser
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted'
+                      'flex space-x-3',
+                      isCurrentUser && 'flex-row-reverse space-x-reverse'
                     )}
                   >
-                    {/* Sender info (only for received messages) */}
-                    {!isFromCurrentUser && (
-                      <div className='mb-1 flex items-center space-x-2'>
-                        <span className='text-sm font-medium'>
-                          {sender?.firstName} {sender?.lastName}
-                        </span>
-                        {sender?.role && sender.role !== 'USER' && (
-                          <Badge
-                            variant='secondary'
-                            className={cn('text-xs', getRoleColor(sender.role))}
-                          >
-                            {sender.role}
-                          </Badge>
-                        )}
-                      </div>
-                    )}
+                    {/* Avatar */}
+                    <div className='flex flex-col items-center'>
+                      {showAvatar ? (
+                        <Avatar className='h-8 w-8'>
+                          <AvatarImage
+                            src={message.sender?.profilePicture}
+                            alt={message.sender?.firstName}
+                          />
+                          <AvatarFallback className='text-xs'>
+                            {message.sender?.firstName?.charAt(0) || 'U'}
+                            {message.sender?.lastName?.charAt(0) || ''}
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <div className='h-8 w-8' /> // Spacer for alignment
+                      )}
+                    </div>
 
-                    {/* Message content */}
-                    <p className='text-sm'>{message.content}</p>
-
-                    {/* Message time */}
-                    <p
+                    {/* Message Content */}
+                    <div
                       className={cn(
-                        'mt-1 text-xs',
-                        isFromCurrentUser
-                          ? 'text-primary-foreground/70'
-                          : 'text-muted-foreground'
+                        'flex max-w-[85%] flex-col space-y-1 sm:max-w-[70%]',
+                        isCurrentUser && 'items-end'
                       )}
                     >
-                      {formatMessageTime(message.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              );
-            })}
+                      {showAvatar && (
+                        <div
+                          className={cn(
+                            'text-muted-foreground flex items-center space-x-2 text-xs',
+                            isCurrentUser && 'flex-row-reverse space-x-reverse'
+                          )}
+                        >
+                          <span className='font-medium'>
+                            {isCurrentUser
+                              ? 'You'
+                              : `${message.sender?.firstName} ${message.sender?.lastName}`}
+                          </span>
+                          {message.sender?.role &&
+                            message.sender.role !== 'USER' && (
+                              <Badge
+                                variant='outline'
+                                className={cn(
+                                  'h-4 px-1 py-0 text-xs',
+                                  getRoleColor(message.sender.role)
+                                )}
+                              >
+                                {message.sender.role}
+                              </Badge>
+                            )}
+                        </div>
+                      )}
 
-            {(!session.messages || session.messages.length === 0) && (
-              <div className='text-muted-foreground py-8 text-center'>
-                <p>No messages yet</p>
-                <p className='text-sm'>Start the conversation!</p>
+                      <div
+                        className={cn(
+                          'rounded-lg px-3 py-2 text-sm leading-relaxed',
+                          isCurrentUser
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted'
+                        )}
+                      >
+                        <p className='break-words whitespace-pre-wrap'>
+                          {message.content}
+                        </p>
+                      </div>
+
+                      <span
+                        className={cn(
+                          'text-muted-foreground text-xs',
+                          isCurrentUser && 'text-right'
+                        )}
+                      >
+                        {formatMessageTime(message.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className='flex h-32 items-center justify-center'>
+                <p className='text-muted-foreground text-center'>
+                  No messages yet. Start the conversation!
+                </p>
               </div>
             )}
 
-            {/* Scroll anchor */}
+            {/* Typing Indicator */}
+            {isTyping && (
+              <div className='flex space-x-3'>
+                <Avatar className='h-8 w-8'>
+                  <AvatarImage
+                    src={otherParticipant?.profilePicture}
+                    alt={otherParticipant?.firstName}
+                  />
+                  <AvatarFallback className='text-xs'>
+                    {otherParticipant?.firstName?.charAt(0) || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <div className='flex items-center space-x-2'>
+                  <div className='bg-muted rounded-lg px-3 py-2'>
+                    <div className='flex space-x-1'>
+                      <div className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full' />
+                      <div
+                        className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
+                        style={{ animationDelay: '0.1s' }}
+                      />
+                      <div
+                        className='bg-muted-foreground h-2 w-2 animate-bounce rounded-full'
+                        style={{ animationDelay: '0.2s' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Auto scroll anchor */}
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
+        {/* Gradient fade untuk indikasi scroll */}
+        <div className='from-background pointer-events-none absolute right-0 bottom-0 left-0 h-4 bg-gradient-to-t to-transparent' />
       </div>
 
       {/* Message Input - Fixed */}
@@ -215,19 +301,27 @@ export default function ChatContent({
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             className='flex-1'
+            disabled={isTyping}
           />
           <Button
             onClick={handleSendMessage}
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || isTyping}
             size='icon'
             className='shrink-0'
           >
             <Send className='h-4 w-4' />
           </Button>
         </div>
-        <p className='text-muted-foreground mt-1 text-xs'>
-          Press Enter to send, Shift+Enter for new line
-        </p>
+        <div className='mt-2 flex items-center justify-between'>
+          <p className='text-muted-foreground text-xs'>
+            Press Enter to send, Shift+Enter for new line
+          </p>
+          {isTyping && (
+            <p className='text-muted-foreground text-xs'>
+              {otherParticipant?.firstName} is typing...
+            </p>
+          )}
+        </div>
       </div>
     </Card>
   );
