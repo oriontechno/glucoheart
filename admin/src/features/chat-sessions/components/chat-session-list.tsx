@@ -115,7 +115,7 @@ export default function ChatSessionList({
                       </div>
 
                       {session.lastMessage && (
-                        <p className='text-muted-foreground mt-1 truncate text-sm'>
+                        <p className='text-muted-foreground mt-1 line-clamp-2 text-sm leading-relaxed'>
                           {session.lastMessage.content}
                         </p>
                       )}
