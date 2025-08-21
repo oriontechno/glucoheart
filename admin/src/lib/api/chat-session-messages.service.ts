@@ -35,5 +35,28 @@ export const chatSessionMessagesService = {
           'Failed to send message'
       };
     }
+  },
+
+  // Assign nurse to chat session
+  assignNurse: async (sessionId: number, nurseId: number) => {
+    try {
+      const response = await api.post(
+        `${config.API_URL}/chat/session/${sessionId}/assign-nurse`,
+        { nurseId }
+      );
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      console.error('Error assigning nurse:', error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to assign nurse'
+      };
+    }
   }
 };

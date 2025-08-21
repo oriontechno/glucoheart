@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, UserPlus } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import {
   ChatSession,
@@ -17,6 +17,7 @@ import {
 } from '@/types/chat';
 import { cn } from '@/lib/utils';
 import { chatSessionMessagesService } from '@/lib/api/chat-session-messages.service';
+import AssignNurseDialog from './assign-nurse-dialog';
 
 interface ChatContentProps {
   session: ChatSession | null;
@@ -32,6 +33,7 @@ export default function ChatContent({
   const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +178,12 @@ export default function ChatContent({
       handleSendMessage();
     }
   };
+
+  const handleAssignSuccess = () => {
+    // Trigger a refresh to update session data
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
   const getRoleColor = (role: string) => {
     switch (role) {
       case 'NURSE':
@@ -285,38 +293,68 @@ export default function ChatContent({
     <Card className='flex h-full max-h-[calc(100vh-8rem)] flex-col gap-0 py-0'>
       {/* Chat Header - Fixed */}
       <div className='bg-card shrink-0 border-b p-4'>
-        <div className='flex items-center space-x-3'>
-          <Avatar className='h-10 w-10'>
-            <AvatarImage
-              src={otherParticipant?.profilePicture}
-              alt={otherParticipant?.firstName}
-            />
-            <AvatarFallback>
-              {otherParticipant?.firstName?.charAt(0) || 'U'}
-              {otherParticipant?.lastName
-                ? otherParticipant.lastName.charAt(0)
-                : ''}
-            </AvatarFallback>
-          </Avatar>
+        <div className='flex items-center justify-between'>
+          <div className='flex items-center space-x-3'>
+            <Avatar className='h-10 w-10'>
+              <AvatarImage
+                src={otherParticipant?.profilePicture}
+                alt={otherParticipant?.firstName}
+              />
+              <AvatarFallback>
+                {otherParticipant?.firstName?.charAt(0) || 'U'}
+                {otherParticipant?.lastName
+                  ? otherParticipant.lastName.charAt(0)
+                  : ''}
+              </AvatarFallback>
+            </Avatar>
 
-          <div>
-            <div className='flex items-center space-x-2'>
-              <h3 className='font-medium'>
-                {otherParticipant?.firstName}
-                {otherParticipant?.lastName && ` ${otherParticipant.lastName}`}
-              </h3>
-              {otherParticipant?.role && otherParticipant.role !== 'USER' && (
-                <Badge
-                  variant='secondary'
-                  className={getRoleColor(otherParticipant.role)}
-                >
-                  {otherParticipant.role}
-                </Badge>
+            <div>
+              <div className='flex items-center space-x-2'>
+                <h3 className='font-medium'>
+                  {otherParticipant?.firstName}
+                  {otherParticipant?.lastName &&
+                    ` ${otherParticipant.lastName}`}
+                </h3>
+                {otherParticipant?.role && otherParticipant.role !== 'USER' && (
+                  <Badge
+                    variant='secondary'
+                    className={getRoleColor(otherParticipant.role)}
+                  >
+                    {otherParticipant.role}
+                  </Badge>
+                )}
+              </div>
+              <p className='text-muted-foreground text-sm'>
+                {otherParticipant?.email}
+              </p>
+
+              {/* Assigned Nurse Info */}
+              {session?.nurse && (
+                <div className='text-muted-foreground mt-1 flex items-center space-x-1 text-xs'>
+                  <span>Assigned to:</span>
+                  <Badge
+                    variant='outline'
+                    className='border-green-200 bg-green-50 text-green-700'
+                  >
+                    {session.nurse.firstName} {session.nurse.lastName}
+                  </Badge>
+                </div>
               )}
             </div>
-            <p className='text-muted-foreground text-sm'>
-              {otherParticipant?.email}
-            </p>
+          </div>
+
+          {/* Assign Nurse Button */}
+          <div className='flex items-center space-x-2'>
+            <AssignNurseDialog
+              sessionId={session.id}
+              currentAssignedNurseId={session?.assignedNurseId}
+              onAssignSuccess={handleAssignSuccess}
+            >
+              <Button variant='outline' size='sm'>
+                <UserPlus className='mr-2 h-4 w-4' />
+                {session?.nurse ? 'Reassign' : 'Assign'}
+              </Button>
+            </AssignNurseDialog>
           </div>
         </div>
       </div>
