@@ -282,85 +282,95 @@ export default function ChatContent({
                   <div
                     key={message.id}
                     className={cn(
-                      'flex space-x-3',
-                      isCurrentUser && 'flex-row-reverse space-x-reverse'
+                      'flex w-full',
+                      isCurrentUser
+                        ? 'justify-end' // Align to right for current user
+                        : 'justify-start' // Align to left for other users
                     )}
                   >
-                    {/* Avatar */}
-                    <div className='flex flex-col items-center'>
-                      {showAvatar ? (
-                        <Avatar className='h-8 w-8'>
-                          <AvatarImage
-                            src={message.sender?.profilePicture}
-                            alt={message.sender?.firstName}
-                          />
-                          <AvatarFallback className='text-xs'>
-                            {message.sender?.firstName?.charAt(0) || 'U'}
-                            {message.sender?.lastName
-                              ? message.sender.lastName.charAt(0)
-                              : ''}
-                          </AvatarFallback>
-                        </Avatar>
-                      ) : (
-                        <div className='h-8 w-8' /> // Spacer for alignment
-                      )}
-                    </div>
-
-                    {/* Message Content */}
                     <div
                       className={cn(
-                        'flex max-w-[85%] flex-col space-y-1 sm:max-w-[70%]',
-                        isCurrentUser && 'items-end'
+                        'flex max-w-[85%] space-x-3 sm:max-w-[70%]',
+                        isCurrentUser && 'flex-row-reverse space-x-reverse'
                       )}
                     >
-                      {showAvatar && (
-                        <div
-                          className={cn(
-                            'text-muted-foreground flex items-center space-x-2 text-xs',
-                            isCurrentUser && 'flex-row-reverse space-x-reverse'
-                          )}
-                        >
-                          <span className='font-medium'>
-                            {isCurrentUser
-                              ? 'You'
-                              : `${message.sender?.firstName}${message.sender?.lastName ? ` ${message.sender.lastName}` : ''}`}
-                          </span>
-                          {message.sender?.role &&
-                            message.sender.role !== 'USER' && (
-                              <Badge
-                                variant='outline'
-                                className={cn(
-                                  'h-4 px-1 py-0 text-xs',
-                                  getRoleColor(message.sender.role)
-                                )}
-                              >
-                                {message.sender.role}
-                              </Badge>
-                            )}
-                        </div>
-                      )}
-
-                      <div
-                        className={cn(
-                          'rounded-lg px-3 py-2 text-sm leading-relaxed',
-                          isCurrentUser
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted'
+                      {/* Avatar */}
+                      <div className='flex flex-col items-center'>
+                        {showAvatar ? (
+                          <Avatar className='h-8 w-8'>
+                            <AvatarImage
+                              src={message.sender?.profilePicture}
+                              alt={message.sender?.firstName}
+                            />
+                            <AvatarFallback className='text-xs'>
+                              {message.sender?.firstName?.charAt(0) || 'U'}
+                              {message.sender?.lastName
+                                ? message.sender.lastName.charAt(0)
+                                : ''}
+                            </AvatarFallback>
+                          </Avatar>
+                        ) : (
+                          <div className='h-8 w-8' /> // Spacer for alignment
                         )}
-                      >
-                        <p className='break-words whitespace-pre-wrap'>
-                          {message.content}
-                        </p>
                       </div>
 
-                      <span
+                      {/* Message Content */}
+                      <div
                         className={cn(
-                          'text-muted-foreground text-xs',
-                          isCurrentUser && 'text-right'
+                          'flex max-w-[85%] flex-col space-y-1 sm:max-w-[70%]',
+                          isCurrentUser && 'items-end'
                         )}
                       >
-                        {formatMessageTime(message.createdAt)}
-                      </span>
+                        {showAvatar && (
+                          <div
+                            className={cn(
+                              'text-muted-foreground flex items-center space-x-2 text-xs',
+                              isCurrentUser &&
+                                'flex-row-reverse space-x-reverse'
+                            )}
+                          >
+                            <span className='font-medium'>
+                              {isCurrentUser
+                                ? 'You'
+                                : `${message.sender?.firstName}${message.sender?.lastName ? ` ${message.sender.lastName}` : ''}`}
+                            </span>
+                            {message.sender?.role &&
+                              message.sender.role !== 'USER' && (
+                                <Badge
+                                  variant='outline'
+                                  className={cn(
+                                    'h-4 px-1 py-0 text-xs',
+                                    getRoleColor(message.sender.role)
+                                  )}
+                                >
+                                  {message.sender.role}
+                                </Badge>
+                              )}
+                          </div>
+                        )}
+
+                        <div
+                          className={cn(
+                            'rounded-lg px-3 py-2 text-sm leading-relaxed',
+                            isCurrentUser
+                              ? 'bg-primary text-primary-foreground ml-auto' // Added ml-auto for right alignment
+                              : 'bg-muted'
+                          )}
+                        >
+                          <p className='break-words whitespace-pre-wrap'>
+                            {message.content}
+                          </p>
+                        </div>
+
+                        <span
+                          className={cn(
+                            'text-muted-foreground text-xs',
+                            isCurrentUser && 'text-right'
+                          )}
+                        >
+                          {formatMessageTime(message.createdAt)}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );

@@ -21,6 +21,24 @@ export class ChatSessionsServerService {
     };
   }
 
+  static async getCurrentUser() {
+    try {
+      const session = await getIronSession<SessionData>(
+        await cookies(),
+        sessionOptions
+      );
+
+      if (!session.isLoggedIn || !session.user) {
+        return null;
+      }
+
+      return session.user;
+    } catch (error) {
+      console.error('Error getting current user from session:', error);
+      return null;
+    }
+  }
+
   static async getChatSessions(
     filters: {
       page?: number;

@@ -1,7 +1,6 @@
 import { searchParamsCache } from '@/lib/searchparams';
 import ChatSessionsLayout from './chat-sessions-layout';
 import { ChatSession, ChatUser, ChatParticipantAPI } from '@/types/chat';
-import { faker } from '@faker-js/faker';
 import { ChatSessionsServerService } from '@/lib/api/chat-sessions.server.service';
 
 // Helper function to convert API data to expected format
@@ -20,7 +19,7 @@ const convertAPISessionToClientSession = (apiSession: any): ChatSession => {
         lastName: participant.lastName || '',
         email: participant.email || '',
         role: participant.userRole || 'USER',
-        profilePicture: faker.image.avatar() // Generate avatar since API doesn't provide
+        profilePicture: undefined // API doesn't provide profile picture
       }
     })) || [];
 
@@ -56,16 +55,6 @@ const convertAPISessionToClientSession = (apiSession: any): ChatSession => {
   };
 };
 
-// Mock current user - ini bisa di-replace dengan data dari session/auth
-const mockCurrentUser: ChatUser = {
-  id: 1,
-  firstName: 'Admin',
-  lastName: 'User',
-  email: 'admin@example.com',
-  role: 'ADMIN',
-  profilePicture: faker.image.avatar()
-};
-
 export default async function ChatSessionsListing() {
   // Get search params
   const page = searchParamsCache.get('page');
@@ -93,9 +82,22 @@ export default async function ChatSessionsListing() {
     );
   }
 
-  // TODO: Get current user from session/auth
-  // const currentUser = await authService.getCurrentUser();
-  const currentUser = mockCurrentUser;
+  // Get current user from iron session
+  const sessionUser = await ChatSessionsServerService.getCurrentUser();
+
+  // Jika tidak ada user di session, redirect atau throw error
+  if (!sessionUser) {
+    throw new Error('User session not found. Please login again.');
+  }
+
+  const currentUser: ChatUser = {
+    id: sessionUser.id,
+    firstName: sessionUser.firstName,
+    lastName: sessionUser.lastName || '',
+    email: sessionUser.email,
+    role: sessionUser.role as 'USER' | 'NURSE' | 'ADMIN' | 'SUPPORT',
+    profilePicture: sessionUser.profilePicture
+  };
 
   return <ChatSessionsLayout sessions={sessions} currentUser={currentUser} />;
 }
