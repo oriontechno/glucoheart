@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChatSession, ChatUser } from '@/types/chat';
 import ChatSessionList from './chat-session-list';
 import ChatContent from './chat-content';
@@ -19,7 +19,7 @@ export default function ChatSessionsLayout({
   const selectedSession =
     sessions.find((s) => s.id === selectedSessionId) || null;
 
-  useMemo(() => {
+  useEffect(() => {
     console.log({ sessions, selectedSessionId });
   }, [sessions, selectedSessionId]);
 

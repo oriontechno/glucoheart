@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send } from 'lucide-react';
+import { Send, Loader2 } from 'lucide-react';
 import { format, isToday, isYesterday } from 'date-fns';
 import {
   ChatSession,
@@ -16,6 +16,7 @@ import {
   ChatParticipantAPI
 } from '@/types/chat';
 import { cn } from '@/lib/utils';
+import { chatSessionMessagesService } from '@/lib/api/chat-session-messages.service';
 
 interface ChatContentProps {
   session: ChatSession | null;
@@ -28,17 +29,65 @@ export default function ChatContent({
 }: ChatContentProps) {
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
-  // Auto scroll to bottom when messages change or session changes or typing state changes
+  // Auto scroll to bottom when messages change or typing state changes
   useEffect(() => {
     const timer = setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [session?.messages, session?.id, isTyping]);
+  }, [messages, isTyping]);
+
+  // Load messages when session changes
+  useEffect(() => {
+    if (session?.id) {
+      setIsLoadingMessages(true);
+      chatSessionMessagesService
+        .getAdminSessionMessages(session.id)
+        .then((response) => {
+          if (response.success && response.messages) {
+            // Convert API messages to expected format
+            const convertedMessages: Message[] = response.messages.map(
+              (apiMessage: any) => {
+                return {
+                  id: apiMessage.id,
+                  sessionId: apiMessage.sessionId,
+                  senderId: apiMessage.sender.id,
+                  content: apiMessage.content,
+                  createdAt: apiMessage.created_at, // API uses snake_case
+                  sender: {
+                    id: apiMessage.sender.id,
+                    firstName: apiMessage.sender.firstName,
+                    lastName: apiMessage.sender.lastName,
+                    email: apiMessage.sender.email,
+                    role: apiMessage.sender.role,
+                    profilePicture: undefined // API doesn't provide profile picture
+                  }
+                };
+              }
+            );
+
+            setMessages(convertedMessages);
+          } else {
+            setMessages([]);
+          }
+        })
+        .catch((error) => {
+          console.error('Error loading messages:', error);
+          setMessages([]);
+        })
+        .finally(() => {
+          setIsLoadingMessages(false);
+        });
+    } else {
+      setMessages([]);
+    }
+  }, [session?.id]);
 
   const handleSendMessage = () => {
     if (!newMessage.trim() || !session) return;
@@ -210,12 +259,21 @@ export default function ChatContent({
           className='h-full max-h-[calc(100vh-16rem)]'
         >
           <div className='space-y-4 p-4 pb-6'>
-            {session.messages && session.messages.length > 0 ? (
-              session.messages.map((message, index) => {
+            {isLoadingMessages ? (
+              <div className='flex h-32 items-center justify-center'>
+                <div className='flex items-center space-x-2'>
+                  <Loader2 className='h-4 w-4 animate-spin' />
+                  <p className='text-muted-foreground text-center'>
+                    Loading messages...
+                  </p>
+                </div>
+              </div>
+            ) : messages && messages.length > 0 ? (
+              messages.map((message, index) => {
                 const isCurrentUser = message.senderId === currentUser.id;
                 const showAvatar =
                   index === 0 ||
-                  session.messages![index - 1]?.senderId !== message.senderId;
+                  messages[index - 1]?.senderId !== message.senderId;
 
                 return (
                   <div
