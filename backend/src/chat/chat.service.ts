@@ -621,57 +621,149 @@ export class ChatService {
   // ================================================================
   // =============   ADMIN/SUPPORT SEND TO ANY SESSION   ============
   // ================================================================
+  // async adminSendMessage(
+  //   acting: Acting,
+  //   sessionId: number,
+  //   dto: { content: string },
+  // ) {
+  //   this.assertAdmin(acting.role);
+
+  //   if (!dto?.content || !dto.content.trim()) {
+  //     throw new BadRequestException('content is required');
+  //   }
+
+  //   // pastikan session ada
+  //   const [sess] = await this.db
+  //     .select()
+  //     .from(chatSessions)
+  //     .where(eq(chatSessions.id, sessionId))
+  //     .limit(1);
+  //   if (!sess) throw new NotFoundException('Session not found');
+
+  //   // insert message atas nama admin/support (meskipun bukan participant)
+  //   const now = new Date();
+  //   const [msg] = await this.db
+  //     .insert(messages)
+  //     .values({
+  //       sessionId,
+  //       senderId: acting.id,
+  //       content: dto.content.trim(),
+  //       createdAt: now, // jika kolom ada default now() juga tidak masalah
+  //     } as any)
+  //     .returning();
+
+  //   // update timestamp session untuk menggelembungkan ke atas di listing
+  //   await this.db
+  //     .update(chatSessions)
+  //     .set({ updatedAt: new Date() } as any)
+  //     .where(eq(chatSessions.id, sessionId));
+
+  //   return {
+  //     ok: true,
+  //     message: {
+  //       id: msg.id,
+  //       sessionId,
+  //       senderId: acting.id,
+  //       content: msg.content,
+  //       createdAt: msg.createdAt,
+  //     },
+  //   };
+  // }
+
   async adminSendMessage(
-    acting: Acting,
+    acting: { id: number; role?: string },
     sessionId: number,
     dto: { content: string },
   ) {
-    this.assertAdmin(acting.role);
+    // pastikan role admin/support (pakai assertAdmin milikmu kalau sudah ada)
+    if (acting.role !== 'ADMIN' && acting.role !== 'SUPPORT') {
+      throw new BadRequestException('Admin/Support only');
+    }
 
-    if (!dto?.content || !dto.content.trim()) {
+    const content = dto?.content?.trim();
+    if (!content) {
       throw new BadRequestException('content is required');
     }
 
     // pastikan session ada
     const [sess] = await this.db
-      .select()
+      .select({ id: chatSessions.id })
       .from(chatSessions)
       .where(eq(chatSessions.id, sessionId))
       .limit(1);
     if (!sess) throw new NotFoundException('Session not found');
 
-    // insert message atas nama admin/support (meskipun bukan participant)
-    const now = new Date();
-    const [msg] = await this.db
-      .insert(messages)
-      .values({
+    try {
+      // insert + update lastMessageId/At dalam transaksi
+      const inserted = await this.db.transaction(async (tx) => {
+        const [msg] = await tx
+          .insert(messages)
+          .values({
+            sessionId,
+            senderId: acting.id,
+            content,
+          } as any)
+          .returning();
+
+        const now = new Date();
+        await tx
+          .update(chatSessions)
+          .set({
+            lastMessageId: msg.id,
+            lastMessageAt: now,
+            updatedAt: now,
+          } as any)
+          .where(eq(chatSessions.id, sessionId));
+
+        return msg;
+      });
+
+      // ambil message + info pengirim (mirror cara di sendMessage user)
+      const [row] = await this.db
+        .select({
+          id: messages.id,
+          sessionId: messages.sessionId,
+          senderId: messages.senderId,
+          content: messages.content,
+          createdAt: messages.createdAt,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profilePicture: users.profilePicture,
+          role: users.role as any,
+        })
+        .from(messages)
+        .leftJoin(users, eq(users.id, messages.senderId))
+        .where(eq(messages.id, inserted.id))
+        .limit(1);
+
+      // gunakan helper kamu kalau ada
+      const payload = this.mapMessageRow
+        ? this.mapMessageRow(row)
+        : {
+            id: row.id,
+            sessionId: row.sessionId,
+            sender: {
+              id: row.senderId,
+              firstName: row.firstName,
+              lastName: row.lastName,
+              profilePicture: row.profilePicture,
+              role: row.role,
+            },
+            content: row.content,
+            createdAt: row.createdAt,
+          };
+
+      // Emit event untuk gateway (ikutkan senderRole agar gateway bisa flag senderIsStaff)
+      this.events.emit('chat.message.created', {
         sessionId,
-        senderId: acting.id,
-        content: dto.content.trim(),
-        createdAt: now, // jika kolom ada default now() juga tidak masalah
-      } as any)
-      .returning();
+        message: payload,
+        senderRole: acting.role ?? row?.role, // <— penting agar gateway bisa flag staff
+      });
 
-    // update timestamp session untuk menggelembungkan ke atas di listing
-    await this.db
-      .update(chatSessions)
-      .set({ updatedAt: new Date() } as any)
-      .where(eq(chatSessions.id, sessionId));
-
-    // (opsional) emit notifikasi via gateway/ws
-    // this.gateway?.emitToSession(sessionId, 'chat.message', {
-    //   id: msg.id, sessionId, senderId: acting.id, content: msg.content, createdAt: msg.createdAt
-    // });
-
-    return {
-      ok: true,
-      message: {
-        id: msg.id,
-        sessionId,
-        senderId: acting.id,
-        content: msg.content,
-        createdAt: msg.createdAt,
-      },
-    };
+      return { ok: true, message: payload };
+    } catch (error) {
+      console.error('Failed to send admin message:', error);
+      throw new InternalServerErrorException('Failed to send message');
+    }
   }
 }
