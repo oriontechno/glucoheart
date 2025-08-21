@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { ChatSession, ChatUser } from '@/types/chat';
+import { ChatSession, ChatUser, Message } from '@/types/chat';
+import { useWebSocket } from '@/hooks/use-websocket';
 import ChatSessionList from './chat-session-list';
 import ChatContent from './chat-content';
 
@@ -16,6 +17,37 @@ export default function ChatSessionsLayout({
 }: ChatSessionsLayoutProps) {
   const [selectedSessionId, setSelectedSessionId] = useState<number>();
   const [sessions, setSessions] = useState<ChatSession[]>(initialSessions);
+
+  // Global websocket connection for session list updates
+  const { isConnected } = useWebSocket({
+    enabled: true,
+    onNewMessage: (message: Message) => {
+      // Update last message for the relevant session
+      setSessions((prevSessions) =>
+        prevSessions.map((session) => {
+          if (session.id === message.sessionId) {
+            return {
+              ...session,
+              lastMessage: message,
+              lastMessageAt: message.createdAt
+            };
+          }
+          return session;
+        })
+      );
+    },
+    onSessionUpdate: (data) => {
+      // Handle session updates like nurse assignment
+      setSessions((prevSessions) =>
+        prevSessions.map((session) => {
+          if (session.id === data.sessionId) {
+            return { ...session, ...data };
+          }
+          return session;
+        })
+      );
+    }
+  });
 
   // Update sessions when initialSessions change
   useEffect(() => {

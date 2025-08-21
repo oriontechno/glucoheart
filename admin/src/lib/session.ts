@@ -19,8 +19,8 @@ export const defaultSession: SessionData = {
 };
 
 // Deteksi environment untuk konfigurasi cookie yang tepat
-const isProduction = process.env.NODE_ENV === 'production';
-const useHTTPS = process.env.USE_HTTPS === 'true';
+const isProduction = config.NODE_ENV === 'production';
+const useHTTPS = config.USE_HTTPS === 'true';
 const isVPSWithHTTP = isProduction && !useHTTPS;
 
 export const sessionOptions: SessionOptions = {

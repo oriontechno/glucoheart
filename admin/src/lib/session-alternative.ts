@@ -41,15 +41,13 @@ export const sessionOptions =
         cookieName: 'glucoheart-session',
         cookieOptions: {
           secure:
-            process.env.NODE_ENV === 'production' &&
-            process.env.USE_HTTPS === 'true',
+            config.NODE_ENV === 'production' && config.USE_HTTPS === 'true',
           httpOnly: true,
           maxAge: 60 * 60 * 24 * 7, // 7 days
           sameSite:
-            process.env.NODE_ENV === 'production' &&
-            process.env.USE_HTTPS !== 'true'
+            config.NODE_ENV === 'production' && config.USE_HTTPS !== 'true'
               ? 'lax'
-              : ((process.env.NODE_ENV === 'production' ? 'none' : 'lax') as
+              : ((config.NODE_ENV === 'production' ? 'none' : 'lax') as
                   | 'lax'
                   | 'strict'
                   | 'none'),

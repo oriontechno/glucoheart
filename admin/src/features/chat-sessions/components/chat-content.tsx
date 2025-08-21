@@ -17,6 +17,7 @@ import {
 } from '@/types/chat';
 import { cn } from '@/lib/utils';
 import { chatSessionMessagesService } from '@/lib/api/chat-session-messages.service';
+import { useWebSocket } from '@/hooks/use-websocket';
 import AssignNurseDialog from './assign-nurse-dialog';
 
 interface ChatContentProps {
@@ -39,6 +40,34 @@ export default function ChatContent({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
+  // WebSocket connection
+  const {
+    isConnected,
+    joinSession,
+    leaveSession,
+    sendMessage: sendWebSocketMessage
+  } = useWebSocket({
+    enabled: !!session,
+    onNewMessage: (message: Message) => {
+      // Add new message from websocket to current session
+      if (message.sessionId === session?.id) {
+        setMessages((prevMessages) => {
+          // Check if message already exists to avoid duplicates
+          if (prevMessages.some((msg) => msg.id === message.id)) {
+            return prevMessages;
+          }
+          return [...prevMessages, message];
+        });
+      }
+    },
+    onSessionUpdate: (data) => {
+      // Handle session updates like nurse assignment
+      if (data.sessionId === session?.id && onSessionUpdate && session) {
+        onSessionUpdate(session.id, data);
+      }
+    }
+  });
+
   // Auto scroll to bottom when messages change or typing state changes
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -47,6 +76,19 @@ export default function ChatContent({
 
     return () => clearTimeout(timer);
   }, [messages, isTyping]);
+
+  // Handle session joining/leaving via websocket
+  useEffect(() => {
+    if (session?.id && isConnected) {
+      joinSession(session.id);
+
+      return () => {
+        if (session?.id) {
+          leaveSession(session.id);
+        }
+      };
+    }
+  }, [session?.id, isConnected, joinSession, leaveSession]);
 
   // Load messages when session changes
   useEffect(() => {
@@ -101,6 +143,18 @@ export default function ChatContent({
     setIsSending(true);
 
     try {
+      // Try websocket first if connected
+      if (isConnected) {
+        const wsResult = await sendWebSocketMessage(session.id, messageContent);
+        if (wsResult) {
+          // Clear input on successful websocket send
+          setNewMessage('');
+          setIsSending(false);
+          return;
+        }
+      }
+
+      // Fallback to HTTP API if websocket fails or not connected
       const response = await chatSessionMessagesService.sendAdminMessage(
         session.id,
         messageContent
@@ -366,6 +420,19 @@ export default function ChatContent({
 
           {/* Assign Nurse Button */}
           <div className='flex items-center space-x-2'>
+            {/* WebSocket Status Indicator */}
+            <div className='flex items-center space-x-1 text-xs'>
+              <div
+                className={cn(
+                  'h-2 w-2 rounded-full',
+                  isConnected ? 'bg-green-500' : 'bg-red-500'
+                )}
+              />
+              <span className='text-muted-foreground'>
+                {isConnected ? 'Live' : 'Offline'}
+              </span>
+            </div>
+
             <AssignNurseDialog
               sessionId={session.id}
               currentAssignedNurseId={session?.assignedNurseId}

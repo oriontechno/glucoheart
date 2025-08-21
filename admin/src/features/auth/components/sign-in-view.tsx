@@ -1,5 +1,6 @@
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ModeToggle } from '@/components/layout/ThemeToggle/theme-toggle';
 import { GitHubLogoIcon } from '@radix-ui/react-icons';
 import { IconStar } from '@tabler/icons-react';
 import { Metadata } from 'next';
@@ -13,19 +14,19 @@ export const metadata: Metadata = {
 
 export default function SignInViewPage() {
   return (
-    <div className='relative h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0'>
-      <Link
-        href='/examples/authentication'
-        className={cn(
-          buttonVariants({ variant: 'ghost' }),
-          'absolute top-4 right-4 hidden md:top-8 md:right-8'
-        )}
-      >
-        Login
-      </Link>
-      <div className='bg-muted relative hidden h-full flex-col p-10 text-white lg:flex dark:border-r'>
-        <div className='absolute inset-0 bg-zinc-900' />
-        <div className='relative z-20 flex items-center text-lg font-medium'>
+    <div className='bg-background relative h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0'>
+      <div className='absolute top-4 right-4 flex items-center space-x-2 md:top-8 md:right-8'>
+        <ModeToggle />
+        <Link
+          href='/dashboard'
+          className={cn(buttonVariants({ variant: 'ghost' }), 'hidden')}
+        >
+          Dashboard
+        </Link>
+      </div>
+      <div className='bg-muted text-foreground relative hidden h-full flex-col border-r p-10 lg:flex'>
+        <div className='from-primary/10 to-primary/5 absolute inset-0 bg-gradient-to-br' />
+        <div className='text-primary relative z-20 flex items-center text-lg font-medium'>
           <svg
             xmlns='http://www.w3.org/2000/svg'
             viewBox='0 0 24 24'
@@ -38,21 +39,31 @@ export default function SignInViewPage() {
           >
             <path d='M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3' />
           </svg>
-          Logo
+          Glucoheart Dashboard
         </div>
         <div className='relative z-20 mt-auto'>
           <blockquote className='space-y-2'>
             <p className='text-lg'>
-              &ldquo;This starter template has saved me countless hours of work
-              and helped me deliver projects to my clients faster than ever
-              before.&rdquo;
+              &ldquo;Glucoheart membantu saya memantau kesehatan dengan lebih
+              baik dan mendapatkan konsultasi yang tepat dari para ahli.&rdquo;
             </p>
-            <footer className='text-sm'>Random Dude</footer>
+            <footer className='text-muted-foreground text-sm'>
+              Healthcare Professional
+            </footer>
           </blockquote>
         </div>
       </div>
-      <div className='flex h-full items-center justify-center p-4 lg:p-8'>
+      <div className='bg-background flex h-full items-center justify-center p-4 lg:p-8'>
         <div className='flex w-full max-w-md flex-col items-center justify-center space-y-6'>
+          <div className='flex flex-col space-y-2 text-center'>
+            <h1 className='text-2xl font-semibold tracking-tight'>
+              Sign in to Glucoheart Dashboard
+            </h1>
+            <p className='text-muted-foreground text-sm'>
+              Welcome back! Please sign in to continue
+            </p>
+          </div>
+
           <UserAuthForm />
 
           <p className='text-muted-foreground px-8 text-center text-sm'>
