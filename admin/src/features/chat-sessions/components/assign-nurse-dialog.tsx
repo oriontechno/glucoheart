@@ -32,7 +32,7 @@ import { chatSessionMessagesService } from '@/lib/api/chat-session-messages.serv
 interface Nurse {
   id: number;
   firstName: string;
-  lastName: string;
+  lastName: string | null;
   email: string;
   role: string;
   profilePicture?: string;
@@ -41,7 +41,7 @@ interface Nurse {
 interface AssignNurseDialogProps {
   sessionId: number;
   currentAssignedNurseId?: number;
-  onAssignSuccess?: () => void;
+  onAssignSuccess?: (updatedNurse?: any) => void;
   children: React.ReactNode;
 }
 
@@ -76,8 +76,10 @@ export default function AssignNurseDialog({
         actives: 'true' // Only get active nurses
       });
 
-      if (response.success && response.data?.users) {
-        const nursesList: Nurse[] = response.data.users.map((user: any) => ({
+      console.log({ response });
+
+      if (response.success && response.users) {
+        const nursesList: Nurse[] = response.users.map((user: any) => ({
           id: user.id,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -85,6 +87,7 @@ export default function AssignNurseDialog({
           role: user.role,
           profilePicture: user.profilePicture
         }));
+        console.log({ nursesList });
         setNurses(nursesList);
 
         // Set currently assigned nurse if exists
@@ -116,37 +119,14 @@ export default function AssignNurseDialog({
 
       if (response.success) {
         setOpen(false);
-        onAssignSuccess?.();
+        // Pass the assigned nurse data to the callback
+        onAssignSuccess?.(selectedNurse);
       } else {
         alert('Failed to assign nurse: ' + response.error);
       }
     } catch (error) {
       console.error('Error assigning nurse:', error);
       alert('An error occurred while assigning nurse. Please try again.');
-    } finally {
-      setIsAssigning(false);
-    }
-  };
-
-  const handleUnassignNurse = async () => {
-    try {
-      setIsAssigning(true);
-      // Send null or 0 to unassign
-      const response = await chatSessionMessagesService.assignNurse(
-        sessionId,
-        0 // Assuming 0 or null unassigns the nurse
-      );
-
-      if (response.success) {
-        setSelectedNurse(null);
-        setOpen(false);
-        onAssignSuccess?.();
-      } else {
-        alert('Failed to unassign nurse: ' + response.error);
-      }
-    } catch (error) {
-      console.error('Error unassigning nurse:', error);
-      alert('An error occurred while unassigning nurse. Please try again.');
     } finally {
       setIsAssigning(false);
     }
@@ -194,11 +174,11 @@ export default function AssignNurseDialog({
                         <AvatarImage src={selectedNurse.profilePicture} />
                         <AvatarFallback className='text-xs'>
                           {selectedNurse.firstName.charAt(0)}
-                          {selectedNurse.lastName.charAt(0)}
+                          {selectedNurse.lastName?.charAt(0) || ''}
                         </AvatarFallback>
                       </Avatar>
                       <span>
-                        {selectedNurse.firstName} {selectedNurse.lastName}
+                        {selectedNurse.firstName} {selectedNurse.lastName || ''}
                       </span>
                     </div>
                   ) : (
@@ -231,12 +211,12 @@ export default function AssignNurseDialog({
                           <AvatarImage src={nurse.profilePicture} />
                           <AvatarFallback className='text-xs'>
                             {nurse.firstName.charAt(0)}
-                            {nurse.lastName.charAt(0)}
+                            {nurse.lastName?.charAt(0) || ''}
                           </AvatarFallback>
                         </Avatar>
                         <div className='flex-1'>
                           <div className='font-medium'>
-                            {nurse.firstName} {nurse.lastName}
+                            {nurse.firstName} {nurse.lastName || ''}
                           </div>
                           <div className='text-muted-foreground text-sm'>
                             {nurse.email}
@@ -272,12 +252,12 @@ export default function AssignNurseDialog({
                   <AvatarImage src={selectedNurse.profilePicture} />
                   <AvatarFallback>
                     {selectedNurse.firstName.charAt(0)}
-                    {selectedNurse.lastName.charAt(0)}
+                    {selectedNurse.lastName?.charAt(0) || ''}
                   </AvatarFallback>
                 </Avatar>
                 <div>
                   <div className='font-medium'>
-                    {selectedNurse.firstName} {selectedNurse.lastName}
+                    {selectedNurse.firstName} {selectedNurse.lastName || ''}
                   </div>
                   <div className='text-muted-foreground text-sm'>
                     {selectedNurse.email}
@@ -294,48 +274,26 @@ export default function AssignNurseDialog({
           )}
         </div>
 
-        <div className='flex justify-between'>
-          <div>
-            {currentAssignedNurseId && (
-              <Button
-                variant='destructive'
-                onClick={handleUnassignNurse}
-                disabled={isAssigning}
-                size='sm'
-              >
-                {isAssigning ? (
-                  <>
-                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                    Unassigning...
-                  </>
-                ) : (
-                  'Unassign Nurse'
-                )}
-              </Button>
+        <div className='flex justify-end space-x-2'>
+          <Button variant='outline' onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAssignNurse}
+            disabled={!selectedNurse || isAssigning}
+          >
+            {isAssigning ? (
+              <>
+                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                Assigning...
+              </>
+            ) : (
+              <>
+                <UserPlus className='mr-2 h-4 w-4' />
+                Assign
+              </>
             )}
-          </div>
-
-          <div className='flex space-x-2'>
-            <Button variant='outline' onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAssignNurse}
-              disabled={!selectedNurse || isAssigning}
-            >
-              {isAssigning ? (
-                <>
-                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                  Assigning...
-                </>
-              ) : (
-                <>
-                  <UserPlus className='mr-2 h-4 w-4' />
-                  Assign
-                </>
-              )}
-            </Button>
-          </div>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

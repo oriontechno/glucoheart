@@ -22,11 +22,13 @@ import AssignNurseDialog from './assign-nurse-dialog';
 interface ChatContentProps {
   session: ChatSession | null;
   currentUser: ChatUser;
+  onSessionUpdate?: (sessionId: number, updates: Partial<ChatSession>) => void;
 }
 
 export default function ChatContent({
   session,
-  currentUser
+  currentUser,
+  onSessionUpdate
 }: ChatContentProps) {
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -179,8 +181,27 @@ export default function ChatContent({
     }
   };
 
-  const handleAssignSuccess = () => {
-    // Trigger a refresh to update session data
+  const handleAssignSuccess = (assignedNurse?: any) => {
+    // If onSessionUpdate callback is provided, trigger session data refresh
+    if (onSessionUpdate && session) {
+      // Update session with the newly assigned nurse
+      const nurseData = assignedNurse
+        ? {
+            id: assignedNurse.id,
+            firstName: assignedNurse.firstName,
+            lastName: assignedNurse.lastName,
+            email: assignedNurse.email
+          }
+        : null;
+
+      onSessionUpdate(session.id, {
+        assignedNurseId: assignedNurse?.id || null,
+        nurse: nurseData || undefined,
+        updatedAt: new Date().toISOString()
+      });
+    }
+
+    // Also trigger the existing refresh mechanism
     setRefreshTrigger((prev) => prev + 1);
   };
 
