@@ -29,6 +29,7 @@ export default function ChatContent({
 }: ChatContentProps) {
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -89,19 +90,84 @@ export default function ChatContent({
     }
   }, [session?.id]);
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !session) return;
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !session || isSending) return;
 
-    // Simulate typing response from other user
-    setTimeout(() => {
-      // setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-      }, 2000);
-    }, 500);
+    const messageContent = newMessage.trim();
+    setIsSending(true);
 
-    // Clear input after "sending"
-    setNewMessage('');
+    try {
+      const response = await chatSessionMessagesService.sendAdminMessage(
+        session.id,
+        messageContent
+      );
+
+      if (response.success) {
+        // Clear input on successful send
+        setNewMessage('');
+
+        // Add the sent message to local state immediately for better UX
+        const newMessageObj: Message = {
+          id: Date.now(), // Temporary ID until we refresh from API
+          sessionId: session.id,
+          senderId: currentUser.id,
+          content: messageContent,
+          createdAt: new Date().toISOString(),
+          sender: {
+            id: currentUser.id,
+            firstName: currentUser.firstName,
+            lastName: currentUser.lastName,
+            email: currentUser.email,
+            role: currentUser.role,
+            profilePicture: currentUser.profilePicture
+          }
+        };
+
+        // Add message to local state
+        setMessages((prevMessages) => [...prevMessages, newMessageObj]);
+
+        // Optionally refresh messages from API to get the actual message with correct ID
+        setTimeout(() => {
+          if (session?.id) {
+            chatSessionMessagesService
+              .getAdminSessionMessages(session.id)
+              .then((refreshResponse) => {
+                if (refreshResponse.success && refreshResponse.messages) {
+                  const convertedMessages: Message[] =
+                    refreshResponse.messages.map((apiMessage: any) => ({
+                      id: apiMessage.id,
+                      sessionId: apiMessage.sessionId,
+                      senderId: apiMessage.sender.id,
+                      content: apiMessage.content,
+                      createdAt: apiMessage.created_at,
+                      sender: {
+                        id: apiMessage.sender.id,
+                        firstName: apiMessage.sender.firstName,
+                        lastName: apiMessage.sender.lastName,
+                        email: apiMessage.sender.email,
+                        role: apiMessage.sender.role,
+                        profilePicture: undefined
+                      }
+                    }));
+                  setMessages(convertedMessages);
+                }
+              })
+              .catch((error) => {
+                console.error('Error refreshing messages:', error);
+              });
+          }
+        }, 500);
+      } else {
+        // Show error message to user
+        console.error('Failed to send message:', response.error);
+        alert('Failed to send message: ' + response.error);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      alert('An error occurred while sending the message. Please try again.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -428,31 +494,36 @@ export default function ChatContent({
       <div className='bg-card shrink-0 border-t p-4'>
         <div className='flex space-x-2'>
           <Input
-            placeholder='Type your message...'
+            placeholder={isSending ? 'Sending...' : 'Type your message...'}
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             className='flex-1'
-            disabled={isTyping}
+            disabled={isTyping || isSending}
           />
           <Button
             onClick={handleSendMessage}
-            disabled={!newMessage.trim() || isTyping}
+            disabled={!newMessage.trim() || isTyping || isSending}
             size='icon'
             className='shrink-0'
           >
-            <Send className='h-4 w-4' />
+            {isSending ? (
+              <Loader2 className='h-4 w-4 animate-spin' />
+            ) : (
+              <Send className='h-4 w-4' />
+            )}
           </Button>
         </div>
         <div className='mt-2 flex items-center justify-between'>
           <p className='text-muted-foreground text-xs'>
             Press Enter to send, Shift+Enter for new line
           </p>
-          {isTyping && (
-            <p className='text-muted-foreground text-xs'>
-              {otherParticipant?.firstName} is typing...
-            </p>
-          )}
+          <div className='text-muted-foreground text-xs'>
+            {isSending && 'Sending message...'}
+            {isTyping &&
+              !isSending &&
+              `${otherParticipant?.firstName} is typing...`}
+          </div>
         </div>
       </div>
     </Card>

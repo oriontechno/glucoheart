@@ -12,5 +12,28 @@ export const chatSessionMessagesService = {
       console.error({ error });
       throw error;
     }
+  },
+
+  // Client-side method to send message (will use axios interceptor for auth)
+  sendAdminMessage: async (sessionId: number, content: string) => {
+    try {
+      const response = await api.post(
+        `${config.API_URL}/chat/admin/sessions/${sessionId}/message`,
+        { content }
+      );
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      return {
+        success: false,
+        error:
+          error.response?.data?.message ||
+          error.message ||
+          'Failed to send message'
+      };
+    }
   }
 };
