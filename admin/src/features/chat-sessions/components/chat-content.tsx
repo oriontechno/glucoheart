@@ -17,19 +17,28 @@ import {
 } from '@/types/chat';
 import { cn } from '@/lib/utils';
 import { chatSessionMessagesService } from '@/lib/api/chat-session-messages.service';
-import { useWebSocket } from '@/hooks/use-websocket';
 import AssignNurseDialog from './assign-nurse-dialog';
 
 interface ChatContentProps {
   session: ChatSession | null;
   currentUser: ChatUser;
   onSessionUpdate?: (sessionId: number, updates: Partial<ChatSession>) => void;
+  websocketConnected?: boolean;
+  onJoinSession?: (sessionId: number) => void;
+  onLeaveSession?: (sessionId: number) => void;
+  onSendMessage?: (sessionId: number, content: string) => Promise<any>;
+  newMessages?: Message[];
 }
 
 export default function ChatContent({
   session,
   currentUser,
-  onSessionUpdate
+  onSessionUpdate,
+  websocketConnected = false,
+  onJoinSession,
+  onLeaveSession,
+  onSendMessage: sendWebSocketMessage,
+  newMessages = []
 }: ChatContentProps) {
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -39,34 +48,6 @@ export default function ChatContent({
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  // WebSocket connection
-  const {
-    isConnected,
-    joinSession,
-    leaveSession,
-    sendMessage: sendWebSocketMessage
-  } = useWebSocket({
-    enabled: !!session,
-    onNewMessage: (message: Message) => {
-      // Add new message from websocket to current session
-      if (message.sessionId === session?.id) {
-        setMessages((prevMessages) => {
-          // Check if message already exists to avoid duplicates
-          if (prevMessages.some((msg) => msg.id === message.id)) {
-            return prevMessages;
-          }
-          return [...prevMessages, message];
-        });
-      }
-    },
-    onSessionUpdate: (data) => {
-      // Handle session updates like nurse assignment
-      if (data.sessionId === session?.id && onSessionUpdate && session) {
-        onSessionUpdate(session.id, data);
-      }
-    }
-  });
 
   // Auto scroll to bottom when messages change or typing state changes
   useEffect(() => {
@@ -79,16 +60,31 @@ export default function ChatContent({
 
   // Handle session joining/leaving via websocket
   useEffect(() => {
-    if (session?.id && isConnected) {
-      joinSession(session.id);
+    if (session?.id && websocketConnected && onJoinSession) {
+      onJoinSession(session.id);
 
       return () => {
-        if (session?.id) {
-          leaveSession(session.id);
+        if (session?.id && onLeaveSession) {
+          onLeaveSession(session.id);
         }
       };
     }
-  }, [session?.id, isConnected, joinSession, leaveSession]);
+  }, [session?.id, websocketConnected, onJoinSession, onLeaveSession]);
+
+  // Handle new messages from websocket
+  useEffect(() => {
+    if (newMessages.length > 0) {
+      setMessages((prevMessages) => {
+        const uniqueMessages = [...prevMessages];
+        newMessages.forEach((newMsg) => {
+          if (!uniqueMessages.some((msg) => msg.id === newMsg.id)) {
+            uniqueMessages.push(newMsg);
+          }
+        });
+        return uniqueMessages;
+      });
+    }
+  }, [newMessages]);
 
   // Load messages when session changes
   useEffect(() => {
@@ -144,7 +140,7 @@ export default function ChatContent({
 
     try {
       // Try websocket first if connected
-      if (isConnected) {
+      if (websocketConnected && sendWebSocketMessage) {
         const wsResult = await sendWebSocketMessage(session.id, messageContent);
         if (wsResult) {
           // Clear input on successful websocket send
@@ -425,11 +421,11 @@ export default function ChatContent({
               <div
                 className={cn(
                   'h-2 w-2 rounded-full',
-                  isConnected ? 'bg-green-500' : 'bg-red-500'
+                  websocketConnected ? 'bg-green-500' : 'bg-red-500'
                 )}
               />
               <span className='text-muted-foreground'>
-                {isConnected ? 'Live' : 'Offline'}
+                {websocketConnected ? 'Live' : 'Offline'}
               </span>
             </div>
 

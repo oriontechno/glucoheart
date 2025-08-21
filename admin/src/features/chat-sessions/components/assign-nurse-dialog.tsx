@@ -76,8 +76,6 @@ export default function AssignNurseDialog({
         actives: 'true' // Only get active nurses
       });
 
-      console.log({ response });
-
       if (response.success && response.users) {
         const nursesList: Nurse[] = response.users.map((user: any) => ({
           id: user.id,
@@ -87,7 +85,6 @@ export default function AssignNurseDialog({
           role: user.role,
           profilePicture: user.profilePicture
         }));
-        console.log({ nursesList });
         setNurses(nursesList);
 
         // Set currently assigned nurse if exists

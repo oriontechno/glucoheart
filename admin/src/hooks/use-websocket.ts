@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Message } from '@/types/chat';
 import { config } from '@/config/env';
@@ -20,6 +20,20 @@ export function useWebSocket({
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
+
+  // Use refs to store the latest callback functions to avoid re-creating socket connection
+  const onNewMessageRef = useRef(onNewMessage);
+  const onSessionUpdateRef = useRef(onSessionUpdate);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onNewMessageRef.current = onNewMessage;
+  }, [onNewMessage]);
+
+  useEffect(() => {
+    onSessionUpdateRef.current = onSessionUpdate;
+  }, [onSessionUpdate]);
+
   useEffect(() => {
     if (!enabled) return;
 
@@ -44,32 +58,27 @@ export function useWebSocket({
         });
 
         socket.on('connect', () => {
-          console.log('✅ Socket connected');
           setIsConnected(true);
           setError(null);
         });
 
         socket.on('disconnect', (reason) => {
-          console.log('❌ Socket disconnected:', reason);
           setIsConnected(false);
         });
 
         socket.on('error', (err) => {
-          console.error('❌ Socket error:', err);
           setError(err);
           setIsConnected(false);
         });
 
         // Listen for new messages
         socket.on('message.new', (message: Message) => {
-          console.log('📨 New message received:', message);
-          onNewMessage?.(message);
+          onNewMessageRef.current?.(message);
         });
 
         // Listen for session updates
         socket.on('session.nurseAssigned', (data) => {
-          console.log('👩‍⚕️ Nurse assigned:', data);
-          onSessionUpdate?.(data);
+          onSessionUpdateRef.current?.(data);
         });
 
         socketRef.current = socket;
@@ -87,7 +96,7 @@ export function useWebSocket({
         socketRef.current = null;
       }
     };
-  }, [enabled, onNewMessage, onSessionUpdate]);
+  }, [enabled]); // Remove onNewMessage and onSessionUpdate from dependencies
 
   const joinSession = async (sessionId: number) => {
     if (!socketRef.current || !isConnected) {
@@ -101,14 +110,13 @@ export function useWebSocket({
       });
       if (response.ok) {
         setCurrentSessionId(sessionId);
-        console.log(`✅ Joined session ${sessionId}`);
         return true;
       } else {
-        console.error('❌ Failed to join session:', response.error);
+        console.warn('Failed to join session:', response.error);
         return false;
       }
     } catch (error) {
-      console.error('❌ Error joining session:', error);
+      console.error('Error joining session:', error);
       return false;
     }
   };
@@ -121,15 +129,14 @@ export function useWebSocket({
       if (currentSessionId === sessionId) {
         setCurrentSessionId(null);
       }
-      console.log(`✅ Left session ${sessionId}`);
     } catch (error) {
-      console.error('❌ Error leaving session:', error);
+      console.error('Error leaving session:', error);
     }
   };
 
   const sendMessage = async (sessionId: number, content: string) => {
     if (!socketRef.current || !isConnected) {
-      console.warn('Socket not connected, cannot send message');
+      console.warn('Cannot send message: Socket not connected');
       return false;
     }
 
@@ -139,14 +146,13 @@ export function useWebSocket({
         content
       });
       if (response.ok) {
-        console.log('✅ Message sent');
         return response.message;
       } else {
-        console.error('❌ Failed to send message:', response.error);
+        console.error('Failed to send message:', response.error);
         return false;
       }
     } catch (error) {
-      console.error('❌ Error sending message:', error);
+      console.error('Error sending message:', error);
       return false;
     }
   };
