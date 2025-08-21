@@ -94,7 +94,7 @@ export default function ChatContent({
 
     // Simulate typing response from other user
     setTimeout(() => {
-      setIsTyping(true);
+      // setIsTyping(true);
       setTimeout(() => {
         setIsTyping(false);
       }, 2000);
@@ -227,14 +227,17 @@ export default function ChatContent({
             />
             <AvatarFallback>
               {otherParticipant?.firstName?.charAt(0) || 'U'}
-              {otherParticipant?.lastName?.charAt(0) || ''}
+              {otherParticipant?.lastName
+                ? otherParticipant.lastName.charAt(0)
+                : ''}
             </AvatarFallback>
           </Avatar>
 
           <div>
             <div className='flex items-center space-x-2'>
               <h3 className='font-medium'>
-                {otherParticipant?.firstName} {otherParticipant?.lastName}
+                {otherParticipant?.firstName}
+                {otherParticipant?.lastName && ` ${otherParticipant.lastName}`}
               </h3>
               {otherParticipant?.role && otherParticipant.role !== 'USER' && (
                 <Badge
@@ -293,7 +296,9 @@ export default function ChatContent({
                           />
                           <AvatarFallback className='text-xs'>
                             {message.sender?.firstName?.charAt(0) || 'U'}
-                            {message.sender?.lastName?.charAt(0) || ''}
+                            {message.sender?.lastName
+                              ? message.sender.lastName.charAt(0)
+                              : ''}
                           </AvatarFallback>
                         </Avatar>
                       ) : (
@@ -318,7 +323,7 @@ export default function ChatContent({
                           <span className='font-medium'>
                             {isCurrentUser
                               ? 'You'
-                              : `${message.sender?.firstName} ${message.sender?.lastName}`}
+                              : `${message.sender?.firstName}${message.sender?.lastName ? ` ${message.sender.lastName}` : ''}`}
                           </span>
                           {message.sender?.role &&
                             message.sender.role !== 'USER' && (
@@ -378,6 +383,9 @@ export default function ChatContent({
                   />
                   <AvatarFallback className='text-xs'>
                     {otherParticipant?.firstName?.charAt(0) || 'U'}
+                    {otherParticipant?.lastName
+                      ? otherParticipant.lastName.charAt(0)
+                      : ''}
                   </AvatarFallback>
                 </Avatar>
                 <div className='flex items-center space-x-2'>

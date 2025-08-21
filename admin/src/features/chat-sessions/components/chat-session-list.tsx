@@ -109,7 +109,9 @@ export default function ChatSessionList({
                       />
                       <AvatarFallback>
                         {otherParticipant?.firstName?.charAt(0) || 'U'}
-                        {otherParticipant?.lastName?.charAt(0) || ''}
+                        {otherParticipant?.lastName
+                          ? otherParticipant.lastName.charAt(0)
+                          : ''}
                       </AvatarFallback>
                     </Avatar>
 
@@ -117,8 +119,9 @@ export default function ChatSessionList({
                       <div className='flex items-center justify-between'>
                         <div className='flex items-center space-x-2'>
                           <h3 className='truncate text-sm font-medium'>
-                            {otherParticipant?.firstName}{' '}
-                            {otherParticipant?.lastName}
+                            {otherParticipant?.firstName}
+                            {otherParticipant?.lastName &&
+                              ` ${otherParticipant.lastName}`}
                           </h3>
                           {otherParticipant?.role &&
                             otherParticipant.role !== 'USER' && (
