@@ -8,18 +8,18 @@ type BreadcrumbItem = {
   link: string;
 };
 
-// This allows to add custom title as well
+// Function to convert path segments to readable titles
+const formatSegmentTitle = (segment: string): string => {
+  return segment
+    .split('-') // Split by dashes
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize each word
+    .join(' '); // Join with spaces
+};
+
+// This allows to add custom title as well for specific routes that need special handling
 const routeMapping: Record<string, BreadcrumbItem[]> = {
-  '/dashboard': [{ title: 'Dashboard', link: '/dashboard' }],
-  '/dashboard/employee': [
-    { title: 'Dashboard', link: '/dashboard' },
-    { title: 'Employee', link: '/dashboard/employee' }
-  ],
-  '/dashboard/product': [
-    { title: 'Dashboard', link: '/dashboard' },
-    { title: 'Product', link: '/dashboard/product' }
-  ]
-  // Add more custom mappings as needed
+  '/dashboard': [{ title: 'Dashboard', link: '/dashboard' }]
+  // Add specific custom mappings only when the dynamic formatting isn't enough
 };
 
 export function useBreadcrumbs() {
@@ -36,7 +36,7 @@ export function useBreadcrumbs() {
     return segments.map((segment, index) => {
       const path = `/${segments.slice(0, index + 1).join('/')}`;
       return {
-        title: segment.charAt(0).toUpperCase() + segment.slice(1),
+        title: formatSegmentTitle(segment),
         link: path
       };
     });

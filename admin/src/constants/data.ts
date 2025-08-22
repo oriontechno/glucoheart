@@ -37,13 +37,13 @@ export const navItems: NavItem[] = [
     isActive: true,
     items: [
       {
-        title: 'Education Article',
+        title: 'Education Articles',
         url: '/dashboard/articles',
         icon: 'post',
         shortcut: ['e', 'a']
       },
       {
-        title: 'Article Category',
+        title: 'Article Categories',
         url: '/dashboard/article-categories',
         icon: 'post',
         shortcut: ['a', 'c']
