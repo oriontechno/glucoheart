@@ -1,163 +1,200 @@
 import {
   WebSocketGateway,
   WebSocketServer,
-  OnGatewayConnection,
-  OnGatewayDisconnect,
   SubscribeMessage,
-  MessageBody,
   ConnectedSocket,
+  MessageBody,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
-import { Inject, Logger } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
-import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { and, eq } from 'drizzle-orm';
-import { discussionParticipants, discussionRooms } from '../db/schema';
+import { Server, Socket } from 'socket.io';
+import { Logger, UseGuards } from '@nestjs/common';
+import { WsJwtGuard } from '../common/guards/ws-jwt.guard'; // sesuaikan path
+import { DiscussionService } from './discussion.service';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 
-interface AuthedSocket extends Socket {
-  data: { user?: { id: number; role?: string } };
-}
+type AuthedSocket = Socket & {
+  data: { user?: { id: number; role?: string; email?: string } };
+};
 
-@WebSocketGateway({
-  namespace: '/discussion',
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-  transports: ['websocket'],
-})
-export class DiscussionGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
-{
-  private readonly logger = new Logger(DiscussionGateway.name);
-  private readonly LOBBY = 'lobby';
+@WebSocketGateway({ cors: { origin: '*' } })
+@UseGuards(WsJwtGuard)
+export class DiscussionGateway {
+  @WebSocketServer() server: Server;
+  private logger = new Logger(DiscussionGateway.name);
 
-  @WebSocketServer() io!: Server;
+  // === room global publik ===
+  private readonly PUBLIC_ROOM = 'discussion:public';
 
   constructor(
-    @Inject('DATABASE_CONNECTION')
-    private readonly db: NodePgDatabase<typeof import('../db/schema')>,
+    private readonly discussion: DiscussionService,
+    private readonly config: ConfigService,
     private readonly jwt: JwtService,
   ) {}
 
-  async handleConnection(socket: AuthedSocket) {
+  private isStaff(role?: string) {
+    return role === 'ADMIN' || role === 'SUPPORT';
+  }
+
+  /** Ambil token dari handshake header/auth/query */
+  private getTokenFromHandshake(socket: AuthedSocket): string | undefined {
+    const headers = socket.handshake.headers as any;
+    const authHeader: string | undefined = headers?.authorization;
+    const bearer = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : undefined;
+    const authPayload = (socket.handshake as any)?.auth;
+    const query = socket.handshake.query as any;
+    return authPayload?.token || bearer || query?.token;
+  }
+
+  private ensureSocketUser(socket: AuthedSocket) {
+    if (socket.data?.user?.id) return;
+    const token = this.getTokenFromHandshake(socket);
+    if (!token) return;
+
     try {
-      const auth = socket.handshake.auth as any;
-      const headers = socket.handshake.headers as any;
-      const query = socket.handshake.query as any;
-      const bearer =
-        typeof headers?.authorization === 'string'
-          ? headers.authorization.split(' ')[1]
-          : undefined;
-      const token = auth?.token || bearer || query?.token;
-      if (!token) return socket.disconnect(true);
+      const secret = this.config.get<string>('JWT_SECRET');
+      const payload = secret
+        ? this.jwt.verify(token, { secret })
+        : (this.jwt.decode(token) as any);
 
-      const payload: any = await this.jwt.verifyAsync(token);
-      const userId = Number(payload?.userId ?? payload?.id ?? payload?.sub);
-      if (!userId || Number.isNaN(userId)) return socket.disconnect(true);
-      socket.data.user = { id: userId, role: payload?.role };
-    } catch {
-      socket.disconnect(true);
+      if (payload?.sub) {
+        socket.data.user = {
+          id: Number(payload.sub),
+          role: payload.role,
+        };
+      }
+    } catch (e) {
+      this.logger.warn(`JWT verify failed in handleConnection: ${e}`);
     }
   }
 
-  async handleDisconnect(_socket: AuthedSocket) {}
+  // === OTOMATIS JOIN ROOM GLOBAL PUBLIK + STAFF ===
+  handleConnection(socket: AuthedSocket) {
+    this.ensureSocketUser(socket);
+    const role = socket.data?.user?.role;
+    const uid = socket.data?.user?.id;
 
-  // === JOIN/LEAVE ROOM (untuk layar room chat) ===
-  @SubscribeMessage('discussion.join')
-  async onJoin(
-    @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() payload: { roomId: number },
-  ) {
-    const userId = socket.data.user?.id;
-    if (!userId) return { ok: false, error: 'unauthorized' };
-    const roomId = Number(payload?.roomId);
-    if (!roomId) return { ok: false, error: 'invalid roomId' };
-
-    const [room] = await this.db
-      .select()
-      .from(discussionRooms)
-      .where(eq(discussionRooms.id, roomId));
-    if (!room) return { ok: false, error: 'not found' };
-
-    if (room.isPublic) {
-      await this.db
-        .insert(discussionParticipants)
-        .values({ roomId, userId, role: 'member' })
-        .onConflictDoNothing();
-      socket.join(this.room(roomId));
-      return { ok: true };
-    }
-
-    const [p] = await this.db
-      .select()
-      .from(discussionParticipants)
-      .where(
-        and(
-          eq(discussionParticipants.roomId, roomId),
-          eq(discussionParticipants.userId, userId),
-        ),
+    // semua user login masuk feed publik
+    if (uid) {
+      socket.join(this.PUBLIC_ROOM);
+      this.logger.log(
+        `Socket ${socket.id} user=${uid} joined '${this.PUBLIC_ROOM}'`,
       );
-    if (!p) return { ok: false, error: 'not a participant' };
+    }
 
-    socket.join(this.room(roomId));
-    return { ok: true };
+    // staff juga join room staff untuk monitoring global
+    if (this.isStaff(role)) {
+      socket.join('staff');
+      this.logger.log(`Socket ${socket.id} (role=${role}) joined room 'staff'`);
+    } else {
+      this.logger.log(`Socket ${socket.id} connected (role=${role})`);
+    }
   }
 
-  @SubscribeMessage('discussion.leave')
-  async onLeave(
+  // ========= (opsional) SUBSCRIBE PER ROOM — now NOT REQUIRED =========
+  // @SubscribeMessage('discussion.subscribe')
+  // async onSubscribe(
+  //   @ConnectedSocket() socket: AuthedSocket,
+  //   @MessageBody() payload: { roomId: number },
+  // ) {
+  //   const userId = socket.data.user?.id;
+  //   if (!userId) return { ok: false, error: 'unauthorized' };
+  //   const roomId = Number(payload?.roomId);
+  //   if (!Number.isInteger(roomId))
+  //     return { ok: false, error: 'invalid roomId' };
+
+  //   socket.join(`discussion:${roomId}`);
+  //   return { ok: true };
+  // }
+
+  // @SubscribeMessage('discussion.unsubscribe')
+  // async onUnsubscribe(
+  //   @ConnectedSocket() socket: AuthedSocket,
+  //   @MessageBody() payload: { roomId: number },
+  // ) {
+  //   const userId = socket.data.user?.id;
+  //   if (!userId) return { ok: false, error: 'unauthorized' };
+  //   const roomId = Number(payload?.roomId);
+  //   if (!Number.isInteger(roomId))
+  //     return { ok: false, error: 'invalid roomId' };
+
+  //   socket.leave(`discussion:${roomId}`);
+  //   return { ok: true };
+  // }
+
+  // ========= KIRIM PESAN TANPA SUBSCRIBE =========
+  @SubscribeMessage('discussion.message.send')
+  async onSend(
     @ConnectedSocket() socket: AuthedSocket,
-    @MessageBody() payload: { roomId: number },
+    @MessageBody() payload: { roomId: number; content: string },
   ) {
+    const user = socket.data.user;
+    if (!user?.id) return { ok: false, error: 'unauthorized' };
+
     const roomId = Number(payload?.roomId);
-    if (!roomId) return;
-    socket.leave(this.room(roomId));
+    const content = (payload?.content ?? '').trim();
+    if (!Number.isInteger(roomId) || roomId <= 0 || !content) {
+      return { ok: false, error: 'invalid payload' };
+    }
+
+    try {
+      // sesuai signature service: (roomId, senderId, dto)
+      const msg = await this.discussion.sendMessage(roomId, user.id, {
+        content,
+      });
+      // Ack ke pengirim; broadcast realtime terjadi via @OnEvent di bawah
+      return { ok: true, message: msg };
+    } catch (e: any) {
+      this.logger.error('discussion.message.send error: ' + (e?.message ?? e));
+      return { ok: false, error: e?.message ?? 'failed to send message' };
+    }
   }
 
-  // === LOBBY (untuk layar list room) ===
-  @SubscribeMessage('discussion.lobby.join')
-  async onLobbyJoin(@ConnectedSocket() socket: AuthedSocket) {
-    // cukup join satu “ruangan” global
-    socket.join(this.LOBBY);
-    return { ok: true };
-  }
-
-  @SubscribeMessage('discussion.lobby.leave')
-  async onLobbyLeave(@ConnectedSocket() socket: AuthedSocket) {
-    socket.leave(this.LOBBY);
-    return { ok: true };
-  }
-
-  private room(id: number) {
-    return `room:${id}`;
-  }
-
+  // ========= RE-BROADCAST EVENT KE FEED PUBLIK (tanpa subscribe) =========
   /**
-   * Service mem-publish payload pesan LENGKAP via event emitter.
-   * Kita broadcast ke:
-   * - room:<roomId>   => untuk layar room chat
-   * - LOBBY           => untuk layar list room (agar bisa update preview & bump urutan)
+   * Pastikan service meng-emit:
+   * this.events.emit('discussion.message.created', {
+   *   roomId,
+   *   message: { id, roomId, senderId, content, createdAt, sender?: {...} },
+   *   senderRole: acting.role, // optional tapi bagus
+   * });
    */
-  @OnEvent('discussion.message.created', { async: true })
-  handleMessageCreated(payload: {
-    id: number;
+  @OnEvent('discussion.message.created')
+  onDiscussionMessageCreated(evt: {
     roomId: number;
-    senderId: number;
-    content: string;
-    createdAt: Date;
-    senderName?: string;
-    senderAvatar?: string;
+    message: any;
+    senderRole?: string;
   }) {
-    // broadcast ke room yang relevan
-    this.io.to(this.room(payload.roomId))
-      .emit('discussion.message.created', payload);
+    const senderIsStaff =
+      evt.senderRole === 'ADMIN' || evt.senderRole === 'SUPPORT';
 
-    // broadcast ringkas ke lobby untuk update list
-    this.io.to(this.LOBBY).emit('discussion.room.updated', {
-      roomId: payload.roomId,
-      lastMessage: payload, // biar front-end bisa langsung tampilkan preview & waktu
+    // 1) FEED PUBLIK (semua user login yang terkoneksi) — TANPA SUBSCRIBE
+    // Client cukup listen 'discussion.message.new' → akan menerima SEMUA pesan publik.
+    // (UI bisa filter berdasarkan evt.message.roomId jika hanya menampilkan room tertentu.)
+    this.server.to(this.PUBLIC_ROOM).emit('discussion.message.new', {
+      ...evt.message,
+      senderIsStaff: senderIsStaff || undefined,
+    });
+
+    // 2) (opsional) juga emit ke room spesifik, untuk klien lama yang masih subscribe per room
+    this.server.to(`discussion:${evt.roomId}`).emit('discussion.message.new', {
+      ...evt.message,
+      senderIsStaff: senderIsStaff || undefined,
+    });
+
+    // 3) feed global staff (monitor)
+    const raw =
+      typeof evt.message?.content === 'string' ? evt.message.content : '';
+    const preview = raw.length > 200 ? raw.slice(0, 200) + '…' : raw;
+    this.server.to('staff').emit('staff.discussion.message.new', {
+      roomId: evt.roomId,
+      id: evt.message?.id,
+      senderId: evt.message?.sender?.id ?? evt.message?.senderId,
+      contentPreview: preview,
+      createdAt: evt.message?.createdAt,
+      senderIsStaff: senderIsStaff || undefined,
     });
   }
 }
