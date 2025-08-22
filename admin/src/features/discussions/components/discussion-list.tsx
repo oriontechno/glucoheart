@@ -73,6 +73,9 @@ export default function DiscussionList({
                               <Lock className='h-3 w-3 text-orange-500' />
                             </div>
                           )}
+                          <Badge variant='secondary' className='text-xs'>
+                            {discussion.is_public ? 'Public' : 'Private'}
+                          </Badge>
                         </div>
                         {discussion.last_message_at && (
                           <span className='text-muted-foreground text-xs'>
@@ -92,18 +95,6 @@ export default function DiscussionList({
                           {discussion.last_message}
                         </p>
                       )}
-
-                      <div className='mt-2 flex items-center space-x-2'>
-                        <div className='flex items-center space-x-1'>
-                          <User className='text-muted-foreground h-3 w-3' />
-                          <span className='text-muted-foreground text-xs'>
-                            Created by User {discussion.created_by}
-                          </span>
-                        </div>
-                        <Badge variant='secondary' className='text-xs'>
-                          {discussion.is_public ? 'Public' : 'Private'}
-                        </Badge>
-                      </div>
                     </div>
                   </div>
                 </div>
