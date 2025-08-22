@@ -18,6 +18,7 @@ export class DiscussionWebSocketService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
+  private isReady = false; // Add ready state flag
 
   constructor(
     private token: string,
@@ -43,11 +44,17 @@ export class DiscussionWebSocketService {
     this.socket.on('connect', () => {
       console.log('Discussion WebSocket connected');
       this.reconnectAttempts = 0;
-      this.onConnectionChange?.(true);
+      
+      // Set ready flag after a small delay to ensure socket is fully initialized
+      setTimeout(() => {
+        this.isReady = true;
+        this.onConnectionChange?.(true);
+      }, 100);
     });
 
     this.socket.on('disconnect', (reason) => {
       console.log('Discussion WebSocket disconnected:', reason);
+      this.isReady = false;
       this.onConnectionChange?.(false);
 
       if (reason === 'io server disconnect') {
@@ -60,6 +67,7 @@ export class DiscussionWebSocketService {
 
     this.socket.on('connect_error', (error) => {
       console.error('Discussion WebSocket connection error:', error);
+      this.isReady = false;
       this.onConnectionChange?.(false);
       this.handleReconnect();
     });
@@ -118,8 +126,8 @@ export class DiscussionWebSocketService {
   }
 
   joinRoom(roomId: number): Promise<any> {
-    if (!this.socket?.connected) {
-      return Promise.reject(new Error('Socket not connected'));
+    if (!this.socket?.connected || !this.isReady) {
+      return Promise.reject(new Error('Socket not connected or not ready'));
     }
 
     return new Promise((resolve, reject) => {
@@ -152,8 +160,8 @@ export class DiscussionWebSocketService {
   }
 
   joinLobby(): Promise<any> {
-    if (!this.socket?.connected) {
-      return Promise.reject(new Error('Socket not connected'));
+    if (!this.socket?.connected || !this.isReady) {
+      return Promise.reject(new Error('Socket not connected or not ready'));
     }
 
     return new Promise((resolve, reject) => {
@@ -208,11 +216,12 @@ export class DiscussionWebSocketService {
   }
 
   isConnected(): boolean {
-    return this.socket?.connected || false;
+    return (this.socket?.connected && this.isReady) || false;
   }
 
   disconnect() {
     if (this.socket) {
+      this.isReady = false;
       this.socket.disconnect();
       this.socket = null;
     }

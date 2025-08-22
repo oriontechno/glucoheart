@@ -104,10 +104,12 @@ export default function DiscussionsLayout({
     }
   }, [roomUpdates, handleRoomUpdate, clearRoomUpdates]);
 
-  // Join lobby when connected
+  // Join lobby when connected and ready
   useEffect(() => {
     if (isConnected) {
-      joinLobby();
+      joinLobby().catch((error) => {
+        console.error('Failed to join lobby:', error);
+      });
     }
   }, [isConnected, joinLobby]);
 
