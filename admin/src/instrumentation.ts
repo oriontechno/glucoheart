@@ -1,11 +1,12 @@
 import * as Sentry from '@sentry/nextjs';
+import { config } from './config/env';
 
 const sentryOptions: Sentry.NodeOptions | Sentry.EdgeOptions = {
   // Sentry DSN
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
   // Enable Spotlight in development
-  spotlight: process.env.NODE_ENV === 'development',
+  spotlight: config.NODE_ENV === 'development',
 
   // Adds request headers and IP for users, for more info visit
   sendDefaultPii: true,

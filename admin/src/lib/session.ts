@@ -1,3 +1,4 @@
+import { config } from '@/config/env';
 import { SessionOptions } from 'iron-session';
 
 export interface SessionData {
@@ -17,16 +18,25 @@ export const defaultSession: SessionData = {
   isLoggedIn: false
 };
 
+// Deteksi environment untuk konfigurasi cookie yang tepat
+const isProduction = config.NODE_ENV === 'production';
+const useHTTPS = config.USE_HTTPS === 'true';
+const isVPSWithHTTP = isProduction && !useHTTPS;
+
 export const sessionOptions: SessionOptions = {
-  password:
-    process.env.SESSION_SECRET ||
-    'complex_password_at_least_32_characters_long_for_security',
+  password: config.SESSION_SECRET || '',
   cookieName: 'glucoheart-session',
   cookieOptions: {
-    secure: process.env.NODE_ENV === 'production',
+    // Hanya secure jika production dan menggunakan HTTPS
+    secure: isProduction && useHTTPS,
     httpOnly: true,
     maxAge: 60 * 60 * 24 * 7, // 7 days
-    sameSite: 'lax',
-    path: '/'
+    // Sesuaikan sameSite berdasarkan environment
+    sameSite: isVPSWithHTTP ? 'lax' : isProduction ? 'none' : 'lax',
+    path: '/',
+    // Tidak set domain untuk fleksibilitas IP address
+    ...(isVPSWithHTTP && {
+      domain: undefined
+    })
   }
 };

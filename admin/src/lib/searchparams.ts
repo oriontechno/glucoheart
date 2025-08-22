@@ -9,8 +9,12 @@ export const searchParams = {
   page: parseAsInteger.withDefault(1),
   perPage: parseAsInteger.withDefault(10),
 
+  // Product search fields
+  name: parseAsString,
+
   // User search fields
-  search: parseAsString,
+  search: parseAsString, // General search parameter for all columns
+  firstName: parseAsString,
   email: parseAsString,
   role: parseAsString,
   active: parseAsString,
@@ -19,6 +23,7 @@ export const searchParams = {
   // Common fields
   gender: parseAsString,
   category: parseAsString,
+  categories: parseAsString,
   sort: parseAsString
   // advanced filter
   // filters: getFiltersStateParser().withDefault([]),

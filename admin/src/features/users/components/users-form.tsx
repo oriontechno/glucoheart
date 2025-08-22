@@ -57,6 +57,7 @@ export default function UsersForm({
       email: z.string().email({
         message: 'Please enter a valid email address.'
       }),
+      password: z.string().optional(),
       role: z.enum(roleValues, {
         required_error: 'Please select a role.'
       })
@@ -83,8 +84,8 @@ export default function UsersForm({
     firstName: initialData?.firstName || '',
     lastName: initialData?.lastName || '',
     email: initialData?.email || '',
-    password: '',
-    role: (initialData?.role || 'user') as (typeof roleValues)[number]
+    role: (initialData?.role || 'USER') as (typeof roleValues)[number],
+    ...(isEditing ? { password: '' } : { password: '' }) // Always include password field
   };
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -98,7 +99,13 @@ export default function UsersForm({
     try {
       if (initialData?.id) {
         // Update existing user
-        await usersService.updateUser(initialData.id.toString(), values);
+        // For updates, only include password if it's not empty
+        const updatePayload = { ...values };
+        if (!values.password || values.password.trim() === '') {
+          delete updatePayload.password;
+        }
+
+        await usersService.updateUser(initialData.id.toString(), updatePayload);
         toast.success('User updated successfully');
       } else {
         // Create new user - ensure password is present
@@ -117,8 +124,6 @@ export default function UsersForm({
       router.push('/dashboard/users');
       router.refresh();
     } catch (error: any) {
-      console.error('Form submission error:', error);
-
       // Handle different types of errors
       if (error.response?.data?.message) {
         toast.error(error.response.data.message);

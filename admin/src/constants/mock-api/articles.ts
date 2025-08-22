@@ -181,7 +181,6 @@ export const fakeArticles = {
   // Get a specific article by ID
   async getArticleById(id: number) {
     await delay(1000); // Simulate a delay
-    console.log({ id });
 
     // Find the article by ID
     const article = this.records.find((article) => article.id === id);

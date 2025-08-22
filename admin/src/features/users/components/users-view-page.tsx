@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import UsersForm from './users-form';
 import { usersService } from '@/lib/api';
+import { UsersServerService } from '@/lib/api/users.server.service';
 
 type TUserViewPageProps = {
   userId: string;
@@ -12,10 +13,10 @@ export default async function UsersViewPage({ userId }: TUserViewPageProps) {
 
   if (userId !== 'new') {
     try {
-      const data = await usersService.getUserById(userId);
+      const data = await UsersServerService.getUserById(userId);
 
-      if (data.success && data.user) {
-        user = data.user;
+      if (data.success && data.data) {
+        user = data.data;
         pageTitle = `Edit User`;
       } else {
         notFound();

@@ -21,22 +21,14 @@ export const navItems: NavItem[] = [
     shortcut: ['d', 'd'],
     items: [] // Empty array as there are no child items for Dashboard
   },
-  {
-    title: 'Product',
-    url: '/dashboard/product',
-    icon: 'product',
-    shortcut: ['p', 'p'],
-    isActive: false,
-    items: [] // No child items
-  },
-  {
-    title: 'Discussion Threads',
-    url: '/dashboard/discussion-threads',
-    icon: 'discussion',
-    shortcut: ['d', 't'],
-    isActive: false,
-    items: []
-  },
+  // {
+  //   title: 'Product',
+  //   url: '/dashboard/product',
+  //   icon: 'product',
+  //   shortcut: ['p', 'p'],
+  //   isActive: false,
+  //   items: [] // No child items
+  // },
   {
     title: 'Articles',
     url: '#',
@@ -57,6 +49,21 @@ export const navItems: NavItem[] = [
         shortcut: ['a', 'c']
       }
     ]
+  },
+  {
+    title: 'Chat Sessions',
+    url: '/dashboard/chat-sessions',
+    icon: 'laptop',
+    shortcut: ['c', 's'],
+    isActive: false
+  },
+  {
+    title: 'Discussions',
+    url: '/dashboard/discussions',
+    icon: 'discussion',
+    shortcut: ['d', 'd'],
+    isActive: false,
+    items: []
   },
   {
     title: 'Users',

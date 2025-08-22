@@ -88,16 +88,8 @@ export default function UserAuthForm() {
   };
 
   return (
-    <Card className='w-full max-w-md bg-[#212126] px-8 py-16'>
-      <CardHeader className='space-y-1'>
-        <CardTitle className='text-center text-xl'>
-          Sign In to GlucoHeart Dashboard
-        </CardTitle>
-        <CardDescription className='text-center'>
-          Welcome back! Please sign in to continue
-        </CardDescription>
-      </CardHeader>
-      <CardContent className='space-y-6'>
+    <Card className='w-full max-w-md'>
+      <CardContent className='space-y-6 pt-6'>
         {error && (
           <Alert variant='destructive'>
             <AlertCircle className='h-4 w-4' />
@@ -155,7 +147,6 @@ export default function UserAuthForm() {
 
             <Button
               disabled={loading}
-              variant={'primaryForeground'}
               className='mt-2 ml-auto w-full'
               type='submit'
             >

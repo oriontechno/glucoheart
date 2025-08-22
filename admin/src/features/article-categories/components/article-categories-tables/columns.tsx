@@ -7,7 +7,7 @@ import { ArticleCategory } from '@/constants/mock-api';
 
 export const columns: ColumnDef<ArticleCategory>[] = [
   {
-    id: 'name',
+    id: 'search',
     accessorKey: 'name',
     header: ({ column }: { column: Column<ArticleCategory, unknown> }) => (
       <DataTableColumnHeader column={column} title='Name' />
@@ -23,13 +23,13 @@ export const columns: ColumnDef<ArticleCategory>[] = [
     enableSorting: true
   },
   {
-    accessorKey: 'created_at',
+    accessorKey: 'createdAt',
     header: ({ column }: { column: Column<ArticleCategory, unknown> }) => (
       <DataTableColumnHeader column={column} title='Created At' />
     ),
     enableSorting: true,
     cell: ({ row }) => {
-      const createdAt = row.getValue('created_at');
+      const createdAt = row.getValue('createdAt');
       return (
         <div>
           {createdAt

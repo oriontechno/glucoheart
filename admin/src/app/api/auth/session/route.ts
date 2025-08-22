@@ -20,7 +20,7 @@ export async function GET() {
       isLoggedIn: session.isLoggedIn
     });
   } catch (error) {
-    console.error('Session check error:', error);
+    console.error('❌ Session check error:', error);
     return NextResponse.json(
       { error: 'Session check failed' },
       { status: 500 }
