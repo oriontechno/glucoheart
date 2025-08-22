@@ -23,7 +23,6 @@ import {
   discussionMessagesService,
   DiscussionMessagesService
 } from '@/lib/api/discussion-messages.service';
-import AssignNurseDialog from './assign-nurse-dialog';
 
 interface DiscussionContentProps {
   session: Discussion | null;
@@ -83,14 +82,18 @@ export default function DiscussionContent({
       setMessages((prevMessages) => {
         const uniqueMessages = [...prevMessages];
         newMessages.forEach((newMsg) => {
-          if (!uniqueMessages.some((msg) => msg.id === newMsg.id)) {
+          // Check for message from current session only
+          if (
+            newMsg.discussion_id === session?.id &&
+            !uniqueMessages.some((msg) => msg.id === newMsg.id)
+          ) {
             uniqueMessages.push(newMsg);
           }
         });
         return uniqueMessages;
       });
     }
-  }, [newMessages]);
+  }, [newMessages, session?.id]);
 
   // Load messages when session changes
   useEffect(() => {
@@ -123,12 +126,35 @@ export default function DiscussionContent({
     const messageContent = newMessage.trim();
     setIsSending(true);
 
+    // Create optimistic message with temporary ID
+    const tempId = Date.now();
+    const optimisticMessage: DiscussionMessage = {
+      id: tempId,
+      discussion_id: session.id,
+      user_id: currentUser.id,
+      content: messageContent,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      user: {
+        id: currentUser.id,
+        firstName: currentUser.firstName || 'You',
+        lastName: currentUser.lastName || '',
+        email: currentUser.email || '',
+        role: currentUser.role || 'USER',
+        profilePicture: currentUser.profilePicture
+      }
+    };
+
     try {
+      // Add optimistic message immediately
+      setMessages((prev) => [...prev, optimisticMessage]);
+
       // Try websocket first if connected
       if (websocketConnected && sendWebSocketMessage) {
         const wsResult = await sendWebSocketMessage(session.id, messageContent);
         if (wsResult) {
-          // Clear input on successful websocket send
+          // Remove optimistic message since real one will come via WebSocket
+          setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
           setNewMessage('');
           setIsSending(false);
           return;
@@ -142,9 +168,11 @@ export default function DiscussionContent({
       );
 
       if (response.success) {
+        // Remove optimistic message since real one will come via HTTP response or refresh
+        setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
         setNewMessage('');
 
-        // Refresh messages to get the new message
+        // Refresh messages to get the new message with proper ID
         setTimeout(() => {
           if (session?.id) {
             DiscussionMessagesService.getDiscussionMessages(session.id)
@@ -160,10 +188,14 @@ export default function DiscussionContent({
         }, 500);
       } else {
         console.error('Failed to send message:', response.error);
+        // Remove optimistic message on error
+        setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
         alert('Failed to send message: ' + response.error);
       }
     } catch (error) {
       console.error('Error sending message:', error);
+      // Remove optimistic message on error
+      setMessages((prev) => prev.filter((msg) => msg.id !== tempId));
       alert('An error occurred while sending the message. Please try again.');
     } finally {
       setIsSending(false);
