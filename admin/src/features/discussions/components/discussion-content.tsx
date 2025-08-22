@@ -99,6 +99,7 @@ export default function DiscussionContent({
 
       DiscussionMessagesService.getDiscussionMessages(session.id)
         .then((response) => {
+          console.log({ response });
           if (response.success && response.messages) {
             setMessages(response.messages);
           } else {
