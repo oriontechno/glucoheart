@@ -1,5 +1,18 @@
 import { User } from './entity';
 
+export interface Discussion {
+  id: number;
+  topic: string;
+  description?: string;
+  is_public?: boolean;
+  created_by: number;
+  created_at: string;
+  updated_at: string;
+  last_message_at: string;
+  last_message: string;
+  last_message_sender_id: number;
+}
+
 export interface ChatSession {
   id: number;
   type: 'one_to_one' | 'group';
