@@ -82,6 +82,55 @@ export class DiscussionServerService {
     }
   }
 
+  static async getDiscussionMessages(discussionId: number) {
+    try {
+      const authConfig = await this.getAuthenticatedRequest();
+
+      const response = await api.get(
+        `/discussion/rooms/${discussionId}/messages`,
+        {
+          ...authConfig
+        }
+      );
+
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch discussion messages',
+        data: {
+          messages: []
+        }
+      };
+    }
+  }
+
+  static async sendDiscussionMessage(discussionId: number, content: string) {
+    try {
+      const authConfig = await this.getAuthenticatedRequest();
+
+      const response = await api.post(
+        `/discussion/rooms/${discussionId}/message`,
+        { content },
+        authConfig
+      );
+
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to send discussion message',
+        data: null
+      };
+    }
+  }
+
   static async getChatSessionMessages(sessionId: number) {
     try {
       const authConfig = await this.getAuthenticatedRequest();

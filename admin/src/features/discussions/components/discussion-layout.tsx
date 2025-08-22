@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
-import { Discussion, ChatUser, Message } from '@/types/chat';
+import { Discussion, ChatUser, Message, DiscussionMessage } from '@/types/chat';
 import { useWebSocket } from '@/hooks/use-websocket';
 import DiscussionList from './discussion-list';
 import ChatContent from './discussion-content';
@@ -18,19 +18,21 @@ export default function DiscussionsLayout({
 }: DiscussionsLayoutProps) {
   const [selectedSessionId, setSelectedSessionId] = useState<number>();
   const [sessions, setSessions] = useState<Discussion[]>(initialSessions);
-  const [currentMessages, setCurrentMessages] = useState<Message[]>([]);
+  const [currentMessages, setCurrentMessages] = useState<DiscussionMessage[]>(
+    []
+  );
 
   // Memoize callback functions to prevent websocket reconnection
   const handleNewMessage = useCallback(
-    (message: Message) => {
+    (message: DiscussionMessage) => {
       // Update last message for the relevant session
       setSessions((prevSessions) =>
         prevSessions.map((session) => {
-          if (session.id === message.sessionId) {
+          if (session.id === message.discussion_id) {
             return {
               ...session,
-              lastMessage: message,
-              lastMessageAt: message.createdAt
+              last_message: message.content,
+              last_message_at: message.created_at
             };
           }
           return session;
@@ -38,7 +40,7 @@ export default function DiscussionsLayout({
       );
 
       // Add to current messages if it's for the selected session
-      if (message.sessionId === selectedSessionId) {
+      if (message.discussion_id === selectedSessionId) {
         setCurrentMessages((prevMessages) => {
           // Check if message already exists to avoid duplicates
           if (prevMessages.some((msg) => msg.id === message.id)) {
@@ -63,12 +65,18 @@ export default function DiscussionsLayout({
     );
   }, []);
 
-  // Global websocket connection for session list updates
-  const { isConnected, joinSession, leaveSession, sendMessage } = useWebSocket({
-    enabled: true,
-    onNewMessage: handleNewMessage,
-    onSessionUpdate: handleSessionUpdate
-  });
+  // Global websocket connection for session list updates (disabled for discussions)
+  // const { isConnected, joinSession, leaveSession, sendMessage } = useWebSocket({
+  //   enabled: true,
+  //   onNewMessage: handleNewMessage,
+  //   onSessionUpdate: handleSessionUpdate
+  // });
+
+  // For now, disable websocket for discussions
+  const isConnected = false;
+  const joinSession = undefined;
+  const leaveSession = undefined;
+  const sendMessage = undefined;
 
   // Function to update a specific session
   const updateSession = (sessionId: number, updates: Partial<Discussion>) => {

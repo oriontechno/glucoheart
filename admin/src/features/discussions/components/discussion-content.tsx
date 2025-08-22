@@ -14,10 +14,15 @@ import {
   Message,
   ChatUser,
   ChatParticipantAPI,
-  Discussion
+  Discussion,
+  DiscussionMessage
 } from '@/types/chat';
 import { cn } from '@/lib/utils';
 import { chatSessionMessagesService } from '@/lib/api/chat-session-messages.service';
+import {
+  discussionMessagesService,
+  DiscussionMessagesService
+} from '@/lib/api/discussion-messages.service';
 import AssignNurseDialog from './assign-nurse-dialog';
 
 interface DiscussionContentProps {
@@ -28,7 +33,7 @@ interface DiscussionContentProps {
   onJoinSession?: (sessionId: number) => void;
   onLeaveSession?: (sessionId: number) => void;
   onSendMessage?: (sessionId: number, content: string) => Promise<any>;
-  newMessages?: Message[];
+  newMessages?: DiscussionMessage[];
 }
 
 export default function DiscussionContent({
@@ -44,7 +49,7 @@ export default function DiscussionContent({
   const [newMessage, setNewMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [isSending, setIsSending] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<DiscussionMessage[]>([]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -91,10 +96,22 @@ export default function DiscussionContent({
   useEffect(() => {
     if (session?.id) {
       setIsLoadingMessages(true);
-      // For now, we'll just show the last message
-      // TODO: Implement proper discussion messages loading
-      setMessages([]);
-      setIsLoadingMessages(false);
+
+      DiscussionMessagesService.getDiscussionMessages(session.id)
+        .then((response) => {
+          if (response.success && response.messages) {
+            setMessages(response.messages);
+          } else {
+            setMessages([]);
+          }
+        })
+        .catch((error) => {
+          console.error('Error loading discussion messages:', error);
+          setMessages([]);
+        })
+        .finally(() => {
+          setIsLoadingMessages(false);
+        });
     } else {
       setMessages([]);
     }
@@ -118,12 +135,33 @@ export default function DiscussionContent({
         }
       }
 
-      // TODO: Implement discussion message sending
-      console.log('Sending message to discussion:', session.id, messageContent);
+      // HTTP fallback using discussion messages API
+      const response = await DiscussionMessagesService.sendDiscussionMessage(
+        session.id,
+        messageContent
+      );
 
-      // For now, just clear the input and show success
-      setNewMessage('');
-      alert('Message functionality for discussions coming soon!');
+      if (response.success) {
+        setNewMessage('');
+
+        // Refresh messages to get the new message
+        setTimeout(() => {
+          if (session?.id) {
+            DiscussionMessagesService.getDiscussionMessages(session.id)
+              .then((refreshResponse) => {
+                if (refreshResponse.success && refreshResponse.messages) {
+                  setMessages(refreshResponse.messages);
+                }
+              })
+              .catch((error) => {
+                console.error('Error refreshing messages:', error);
+              });
+          }
+        }, 500);
+      } else {
+        console.error('Failed to send message:', response.error);
+        alert('Failed to send message: ' + response.error);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       alert('An error occurred while sending the message. Please try again.');
@@ -243,10 +281,10 @@ export default function DiscussionContent({
               </div>
             ) : messages && messages.length > 0 ? (
               messages.map((message, index) => {
-                const isCurrentUser = message.senderId === currentUser.id;
+                const isCurrentUser = message.user_id === currentUser.id;
                 const showAvatar =
                   index === 0 ||
-                  messages[index - 1]?.senderId !== message.senderId;
+                  messages[index - 1]?.user_id !== message.user_id;
 
                 return (
                   <div
@@ -269,13 +307,13 @@ export default function DiscussionContent({
                         {showAvatar ? (
                           <Avatar className='h-8 w-8'>
                             <AvatarImage
-                              src={message.sender?.profilePicture}
-                              alt={message.sender?.firstName}
+                              src={message.user?.profilePicture}
+                              alt={message.user?.firstName}
                             />
                             <AvatarFallback className='text-xs'>
-                              {message.sender?.firstName?.charAt(0) || 'U'}
-                              {message.sender?.lastName
-                                ? message.sender.lastName.charAt(0)
+                              {message.user?.firstName?.charAt(0) || 'U'}
+                              {message.user?.lastName
+                                ? message.user.lastName.charAt(0)
                                 : ''}
                             </AvatarFallback>
                           </Avatar>
@@ -302,18 +340,18 @@ export default function DiscussionContent({
                             <span className='font-medium'>
                               {isCurrentUser
                                 ? 'You'
-                                : `${message.sender?.firstName}${message.sender?.lastName ? ` ${message.sender.lastName}` : ''}`}
+                                : `${message.user?.firstName}${message.user?.lastName ? ` ${message.user.lastName}` : ''}`}
                             </span>
-                            {message.sender?.role &&
-                              message.sender.role !== 'USER' && (
+                            {message.user?.role &&
+                              message.user.role !== 'USER' && (
                                 <Badge
                                   variant='outline'
                                   className={cn(
                                     'h-4 px-1 py-0 text-xs',
-                                    getRoleColor(message.sender.role)
+                                    getRoleColor(message.user.role)
                                   )}
                                 >
-                                  {message.sender.role}
+                                  {message.user.role}
                                 </Badge>
                               )}
                           </div>
@@ -323,7 +361,7 @@ export default function DiscussionContent({
                           className={cn(
                             'rounded-lg px-3 py-2 text-sm leading-relaxed',
                             isCurrentUser
-                              ? 'bg-primary text-primary-foreground ml-auto' // Added ml-auto for right alignment
+                              ? 'bg-primary text-primary-foreground'
                               : 'bg-muted'
                           )}
                         >
@@ -338,7 +376,7 @@ export default function DiscussionContent({
                             isCurrentUser && 'text-right'
                           )}
                         >
-                          {formatMessageTime(message.createdAt)}
+                          {formatMessageTime(message.created_at)}
                         </span>
                       </div>
                     </div>
@@ -347,29 +385,18 @@ export default function DiscussionContent({
               })
             ) : (
               <div className='flex h-32 flex-col items-center justify-center space-y-2 text-center'>
-                {session.last_message ? (
-                  <div className='space-y-2'>
-                    <p className='text-muted-foreground text-sm'>
-                      Last message:
-                    </p>
-                    <div className='bg-muted max-w-md rounded-lg p-3'>
-                      <p className='text-sm'>{session.last_message}</p>
-                      <p className='text-muted-foreground mt-1 text-xs'>
-                        {formatMessageTime(session.last_message_at)}
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <p className='text-muted-foreground text-center'>
-                    No messages yet. Start the conversation!
-                  </p>
-                )}
+                <p className='text-muted-foreground text-center'>
+                  No messages yet. Start the conversation!
+                </p>
               </div>
             )}
 
             {/* Typing Indicator */}
             {isTyping && (
               <div className='flex space-x-3'>
+                <Avatar className='h-8 w-8'>
+                  <AvatarFallback className='text-xs'>U</AvatarFallback>
+                </Avatar>
                 <div className='flex items-center space-x-2'>
                   <div className='bg-muted rounded-lg px-3 py-2'>
                     <div className='flex space-x-1'>
