@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Discussion, ChatUser, Message, DiscussionMessage } from '@/types/chat';
-import { useWebSocket } from '@/hooks/use-websocket';
+import { useDiscussionWebSocket } from '@/hooks/use-discussion-websocket';
 import DiscussionList from './discussion-list';
 import ChatContent from './discussion-content';
 import DiscussionContent from './discussion-content';
@@ -10,11 +10,13 @@ import DiscussionContent from './discussion-content';
 interface DiscussionsLayoutProps {
   sessions: Discussion[];
   currentUser: ChatUser;
+  token?: string; // Add token prop
 }
 
 export default function DiscussionsLayout({
   sessions: initialSessions,
-  currentUser
+  currentUser,
+  token = '' // Default empty token
 }: DiscussionsLayoutProps) {
   const [selectedSessionId, setSelectedSessionId] = useState<number>();
   const [sessions, setSessions] = useState<Discussion[]>(initialSessions);
@@ -53,8 +55,64 @@ export default function DiscussionsLayout({
     [selectedSessionId]
   );
 
+  const handleRoomUpdate = useCallback((data: any) => {
+    // Handle room updates for the discussion list
+    setSessions((prevSessions) =>
+      prevSessions.map((session) => {
+        if (session.id === data.roomId && data.lastMessage) {
+          return {
+            ...session,
+            last_message: data.lastMessage.content,
+            last_message_at: data.lastMessage.createdAt
+          };
+        }
+        return session;
+      })
+    );
+  }, []);
+
+  // Discussion WebSocket connection
+  const {
+    isConnected,
+    newMessages,
+    roomUpdates,
+    joinRoom,
+    leaveRoom,
+    joinLobby,
+    leaveLobby,
+    sendMessage,
+    clearNewMessages,
+    clearRoomUpdates
+  } = useDiscussionWebSocket({
+    token,
+    enabled: !!token
+  });
+
+  // Handle new messages from websocket
+  useEffect(() => {
+    if (newMessages.length > 0) {
+      newMessages.forEach(handleNewMessage);
+      clearNewMessages();
+    }
+  }, [newMessages, handleNewMessage, clearNewMessages]);
+
+  // Handle room updates from websocket
+  useEffect(() => {
+    if (roomUpdates.length > 0) {
+      roomUpdates.forEach(handleRoomUpdate);
+      clearRoomUpdates();
+    }
+  }, [roomUpdates, handleRoomUpdate, clearRoomUpdates]);
+
+  // Join lobby when connected
+  useEffect(() => {
+    if (isConnected) {
+      joinLobby();
+    }
+  }, [isConnected, joinLobby]);
+
   const handleSessionUpdate = useCallback((data: any) => {
-    // Handle session updates like nurse assignment
+    // Handle session updates like nurse assignment (not used for discussions)
     setSessions((prevSessions) =>
       prevSessions.map((session) => {
         if (session.id === data.sessionId) {
@@ -64,19 +122,6 @@ export default function DiscussionsLayout({
       })
     );
   }, []);
-
-  // Global websocket connection for session list updates (disabled for discussions)
-  // const { isConnected, joinSession, leaveSession, sendMessage } = useWebSocket({
-  //   enabled: true,
-  //   onNewMessage: handleNewMessage,
-  //   onSessionUpdate: handleSessionUpdate
-  // });
-
-  // For now, disable websocket for discussions
-  const isConnected = false;
-  const joinSession = undefined;
-  const leaveSession = undefined;
-  const sendMessage = undefined;
 
   // Function to update a specific session
   const updateSession = (sessionId: number, updates: Partial<Discussion>) => {
@@ -121,8 +166,8 @@ export default function DiscussionsLayout({
           currentUser={currentUser}
           onSessionUpdate={updateSession}
           websocketConnected={isConnected}
-          onJoinSession={joinSession}
-          onLeaveSession={leaveSession}
+          onJoinSession={joinRoom}
+          onLeaveSession={leaveRoom}
           onSendMessage={sendMessage}
           newMessages={currentMessages}
         />

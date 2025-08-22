@@ -38,6 +38,9 @@ export default async function DiscussionListing() {
     throw new Error('User session not found. Please login again.');
   }
 
+  // Get access token for websocket
+  const accessToken = await DiscussionServerService.getAccessToken();
+
   const currentUser: ChatUser = {
     id: sessionUser.id,
     firstName: sessionUser.firstName,
@@ -47,5 +50,11 @@ export default async function DiscussionListing() {
     profilePicture: sessionUser.profilePicture
   };
 
-  return <DiscussionsLayout sessions={discussions} currentUser={currentUser} />;
+  return (
+    <DiscussionsLayout
+      sessions={discussions}
+      currentUser={currentUser}
+      token={accessToken}
+    />
+  );
 }

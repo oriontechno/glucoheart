@@ -39,6 +39,24 @@ export class DiscussionServerService {
     }
   }
 
+  static async getAccessToken() {
+    try {
+      const session = await getIronSession<SessionData>(
+        await cookies(),
+        sessionOptions
+      );
+
+      if (!session.isLoggedIn || !session.access_token) {
+        return '';
+      }
+
+      return session.access_token;
+    } catch (error) {
+      console.error('Error getting access token from session:', error);
+      return '';
+    }
+  }
+
   static async getDiscussions(
     filters: {
       page?: number;
