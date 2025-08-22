@@ -82,6 +82,16 @@ const multerAvatarOptions = {
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Get('count')
+  async countUsers(
+    @Query('period') period?: string, // day|week|month|year|all
+    @Query('from') from?: string, // ISO date (opsional)
+    @Query('to') to?: string, // ISO date (opsional)
+    @Query('roles') roles?: string, // "user.admin" (opsional)
+  ) {
+    return this.usersService.countUsers({ period, from, to, roles });
+  }
+
   // ====== User ganti avatar miliknya ======
   @Post('me/avatar')
   @UseInterceptors(FileInterceptor('avatar', multerAvatarOptions))

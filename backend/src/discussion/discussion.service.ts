@@ -5,7 +5,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql, gte, lte } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Inject } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -18,6 +18,8 @@ import {
 import { CreateRoomDto } from './dto/create-room.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { DiscussionSendMessageDto } from './dto/send-message.dto';
+
+type Period = 'day' | 'week' | 'month' | 'year' | 'all';
 
 @Injectable()
 export class DiscussionService {
@@ -90,6 +92,121 @@ export class DiscussionService {
     } catch {
       return [def];
     }
+  }
+
+  private parsePeriod(raw?: string): Period {
+    const v = String(raw ?? 'all').toLowerCase();
+    if (
+      v === 'day' ||
+      v === 'week' ||
+      v === 'month' ||
+      v === 'year' ||
+      v === 'all'
+    )
+      return v;
+    throw new BadRequestException(
+      'Invalid period. Use day|week|month|year|all',
+    );
+  }
+
+  private computeDefaultRange(period: Period): { from?: Date; to?: Date } {
+    if (period === 'all') return {};
+    const to = new Date();
+    const from = new Date(to);
+    switch (period) {
+      case 'day':
+        from.setDate(to.getDate() - 1); // 1 hari terakhir
+        break;
+      case 'week':
+        from.setDate(to.getDate() - 7);
+        break;
+      case 'month':
+        from.setMonth(to.getMonth() - 1); // 1 bulan terakhir
+        break;
+      case 'year':
+        from.setFullYear(to.getFullYear() - 1); // 1 tahun terakhir
+        break;
+    }
+    return { from, to };
+  }
+
+  private normalizeRange(period: Period, from?: string, to?: string) {
+    const def = this.computeDefaultRange(period);
+    const f = from ? new Date(from) : def.from;
+    const t = to ? new Date(to) : def.to;
+    if (f && isNaN(+f)) throw new BadRequestException('Invalid from date');
+    if (t && isNaN(+t)) throw new BadRequestException('Invalid to date');
+    return { from: f, to: t };
+  }
+
+  // ================================== END HELPER ============================================== //
+
+  /**
+   * Hitung jumlah discussion rooms (grup) dengan opsi range & period.
+   * Query:
+   * - period: 'day'|'week'|'month'|'year'|'all' (default: 'all')
+   * - from, to: ISO date (opsional; bila period ≠ 'all' & tidak diisi -> default)
+   */
+  async countRooms(params: { period?: string; from?: string; to?: string }) {
+    const period = this.parsePeriod(params.period);
+    const { from, to } = this.normalizeRange(period, params.from, params.to);
+
+    // WHERE dasar
+    const whereParts: any[] = [];
+    if (from) whereParts.push(gte(discussionRooms.createdAt as any, from));
+    if (to) whereParts.push(lte(discussionRooms.createdAt as any, to));
+    const where = whereParts.length ? and(...whereParts) : undefined;
+
+    // ALL = total (atau total dalam range jika from/to ada)
+    if (period === 'all') {
+      const [{ total }] = await this.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(discussionRooms as any)
+        .where(where);
+
+      return {
+        success: true,
+        time: new Date().toISOString(),
+        period,
+        from: from?.toISOString() ?? null,
+        to: to?.toISOString() ?? null,
+        total,
+        buckets: [],
+      };
+    }
+
+    // Time-series per bucket (day/week/month/year) berdasarkan createdAt
+    const bucketExpr = sql<Date>`
+    date_trunc(${sql.raw(`'${period}'`)}, ${discussionRooms.createdAt})
+  `;
+
+    const rows = await this.db
+      .select({
+        bucketStart: bucketExpr,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(discussionRooms as any)
+      .where(where)
+      .groupBy(bucketExpr)
+      .orderBy(asc(bucketExpr));
+
+    const total = rows.reduce((acc, r) => acc + (r.count ?? 0), 0);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      period,
+      from: from?.toISOString() ?? null,
+      to: to?.toISOString() ?? null,
+      total,
+      buckets: rows.map((r) => ({
+        start:
+          r.bucketStart instanceof Date
+            ? r.bucketStart.toISOString()
+            : String(r.bucketStart),
+        count: r.count,
+      })),
+    };
   }
 
   // === GET /discussions/all ===
