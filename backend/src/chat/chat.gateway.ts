@@ -22,7 +22,7 @@ interface AuthedSocket extends Socket {
   data: { user?: { id: number; role?: string } };
 }
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({ namespace: 'chat', cors: { origin: '*' } })
 export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   private readonly logger = new Logger(ChatGateway.name);
 
