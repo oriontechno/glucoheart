@@ -4,9 +4,10 @@ import { searchParamsCache } from '@/lib/searchparams';
 import { SearchParams } from 'nuqs';
 import { Suspense } from 'react';
 import ChatSessionsListing from '@/features/chat-sessions/components/chat-sessions-listing';
+import DiscussionListing from '@/features/discussions/components/discussion-listing';
 
 export const metadata = {
-  title: 'Dashboard: Chat Sessions'
+  title: 'Dashboard: Discussion'
 };
 
 type pageProps = {
@@ -20,11 +21,10 @@ export default async function Page(props: pageProps) {
 
   return (
     <div className='flex min-h-screen flex-col'>
-      {/* Fixed Header */}
       <div className='bg-background shrink-0 border-b p-4 md:px-6'>
         <Heading
-          title='Chat Sessions'
-          description='Monitor and manage chat sessions between users and healthcare professionals.'
+          title='Discussions'
+          description='Monitor and manage discussions between users and healthcare professionals.'
         />
       </div>
 
@@ -35,7 +35,7 @@ export default async function Page(props: pageProps) {
             <DataTableSkeleton columnCount={3} rowCount={6} filterCount={1} />
           }
         >
-          <ChatSessionsListing />
+          <DiscussionListing />
         </Suspense>
       </div>
     </div>

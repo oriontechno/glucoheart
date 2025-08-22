@@ -116,6 +116,79 @@ export class DiscussionGateway
     socket.leave(this.room(roomId));
   }
 
+  // === SEND MESSAGE ===
+  @SubscribeMessage('discussion.send.message')
+  async onSendMessage(
+    @ConnectedSocket() socket: AuthedSocket,
+    @MessageBody() payload: { roomId: number; content: string },
+  ) {
+    const userId = socket.data.user?.id;
+    if (!userId) return { ok: false, error: 'unauthorized' };
+
+    const roomId = Number(payload?.roomId);
+    const content = payload?.content?.trim();
+
+    if (!roomId || !content) {
+      return { ok: false, error: 'invalid roomId or content' };
+    }
+
+    try {
+      // Check if user can send message to this room
+      const [room] = await this.db
+        .select()
+        .from(discussionRooms)
+        .where(eq(discussionRooms.id, roomId));
+
+      if (!room) {
+        return { ok: false, error: 'room not found' };
+      }
+
+      if (!room.isPublic) {
+        // For private rooms, check if user is a participant
+        const [participant] = await this.db
+          .select()
+          .from(discussionParticipants)
+          .where(
+            and(
+              eq(discussionParticipants.roomId, roomId),
+              eq(discussionParticipants.userId, userId),
+            ),
+          );
+
+        if (!participant) {
+          return { ok: false, error: 'not a participant' };
+        }
+      }
+
+      // For now, we'll emit the event and let the service handle database insertion
+      // In a real implementation, you might want to save to DB here or call the service
+      const messageData = {
+        roomId,
+        senderId: userId,
+        content,
+        createdAt: new Date().toISOString(),
+        senderName: socket.data.user?.role || 'User',
+      };
+
+      // Emit to the room
+      this.io.to(this.room(roomId)).emit('discussion.message.created', {
+        id: Date.now(), // Temporary ID
+        ...messageData,
+      });
+
+      // Emit to lobby for room list updates
+      this.io.to(this.LOBBY).emit('discussion.room.updated', {
+        roomId,
+        lastMessage: messageData,
+      });
+
+      return { ok: true };
+    } catch (error) {
+      this.logger.error('Error sending message:', error);
+      return { ok: false, error: 'internal error' };
+    }
+  }
+
   // === LOBBY (untuk layar list room) ===
   @SubscribeMessage('discussion.lobby.join')
   async onLobbyJoin(@ConnectedSocket() socket: AuthedSocket) {
@@ -151,7 +224,8 @@ export class DiscussionGateway
     senderAvatar?: string;
   }) {
     // broadcast ke room yang relevan
-    this.io.to(this.room(payload.roomId))
+    this.io
+      .to(this.room(payload.roomId))
       .emit('discussion.message.created', payload);
 
     // broadcast ringkas ke lobby untuk update list
