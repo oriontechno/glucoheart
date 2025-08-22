@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { Discussion, ChatUser, Message, DiscussionMessage } from '@/types/chat';
 import { useDiscussionWebSocket } from '@/hooks/use-discussion-websocket';
 import DiscussionList from './discussion-list';
@@ -24,9 +24,27 @@ export default function DiscussionsLayout({
     []
   );
 
+  // Track processed message IDs to prevent duplicates
+  const processedMessageIds = useRef(new Set<number>());
+
   // Memoize callback functions to prevent websocket reconnection
   const handleNewMessage = useCallback(
     (message: DiscussionMessage) => {
+      // Check for duplicates using message ID
+      if (processedMessageIds.current.has(message.id)) {
+        return;
+      }
+
+      // Add message ID to processed set
+      processedMessageIds.current.add(message.id);
+
+      // Clean up old message IDs (keep only last 1000 messages)
+      if (processedMessageIds.current.size > 1000) {
+        const idsArray = Array.from(processedMessageIds.current);
+        const oldIds = idsArray.slice(0, idsArray.length - 1000);
+        oldIds.forEach((id) => processedMessageIds.current.delete(id));
+      }
+
       // Update last message for the relevant session
       setSessions((prevSessions) =>
         prevSessions.map((session) => {
@@ -44,7 +62,7 @@ export default function DiscussionsLayout({
       // Add to current messages if it's for the selected session
       if (message.discussion_id === selectedSessionId) {
         setCurrentMessages((prevMessages) => {
-          // Check if message already exists to avoid duplicates
+          // Double check if message already exists in current messages
           if (prevMessages.some((msg) => msg.id === message.id)) {
             return prevMessages;
           }
@@ -137,6 +155,8 @@ export default function DiscussionsLayout({
   // Reset current messages when session changes
   useEffect(() => {
     setCurrentMessages([]);
+    // Clear processed message IDs for new session to allow fresh message loading
+    processedMessageIds.current.clear();
   }, [selectedSessionId]);
 
   // Update sessions when initialSessions change
