@@ -58,6 +58,17 @@ export class ChatController {
     );
   }
 
+  @Get('sessions/count')
+  async countSessions(
+    @Query('period') period?: string, // day|week|month|year|all
+    @Query('from') from?: string, // ISO date (opsional)
+    @Query('to') to?: string, // ISO date (opsional)
+    @Query('type') type?: string, // one_to_one|group|all
+    @Query('assigned') assigned?: string, // true|false
+  ) {
+    return this.chat.countSessions({ period, from, to, type, assigned });
+  }
+
   // POST /chat/session/by-role : create/get 1:1 session targeting a role (ADMIN/SUPPORT)
   @Post('session')
   // @ZodValidation(createSessionByRoleSchema)

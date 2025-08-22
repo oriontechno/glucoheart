@@ -19,6 +19,8 @@ import {
   notInArray,
   ne,
   or,
+  gte,
+  lte,
 } from 'drizzle-orm';
 import {
   articles,
@@ -40,12 +42,59 @@ type ArticleStatus = 'draft' | 'published';
 type ArticleRow = typeof articles.$inferSelect;
 type CategoryRow = typeof articleCategories.$inferSelect;
 
+type Period = 'day' | 'week' | 'month' | 'year' | 'all';
+
 @Injectable()
 export class ArticlesService {
   constructor(
     @Inject('DATABASE_CONNECTION')
     private readonly db: NodePgDatabase<typeof import('../db/schema')>,
   ) {}
+
+  private parsePeriod(raw?: string): Period {
+    const v = String(raw ?? 'all').toLowerCase();
+    if (
+      v === 'day' ||
+      v === 'week' ||
+      v === 'month' ||
+      v === 'year' ||
+      v === 'all'
+    )
+      return v;
+    throw new BadRequestException(
+      'Invalid period. Use day|week|month|year|all',
+    );
+  }
+
+  private computeDefaultRange(period: Period): { from?: Date; to?: Date } {
+    if (period === 'all') return {};
+    const to = new Date();
+    const from = new Date(to);
+    switch (period) {
+      case 'day':
+        from.setDate(to.getDate() - 1); // 1 hari terakhir
+        break;
+      case 'week':
+        from.setDate(to.getDate() - 7);
+        break;
+      case 'month':
+        from.setMonth(to.getMonth() - 1); // 1 bulan terakhir
+        break;
+      case 'year':
+        from.setFullYear(to.getFullYear() - 1); // 1 tahun terakhir
+        break;
+    }
+    return { from, to };
+  }
+
+  private normalizeRange(period: Period, from?: string, to?: string) {
+    const def = this.computeDefaultRange(period);
+    const f = from ? new Date(from) : def.from;
+    const t = to ? new Date(to) : def.to;
+    if (f && isNaN(+f)) throw new BadRequestException('Invalid from date');
+    if (t && isNaN(+t)) throw new BadRequestException('Invalid to date');
+    return { from: f, to: t };
+  }
 
   private assertWriter(role?: string) {
     if (role !== 'ADMIN' && role !== 'SUPPORT') {
@@ -385,6 +434,134 @@ export class ArticlesService {
       .insert(articleCategoryLinks)
       .values(catIds.map((id) => ({ articleId, categoryId: id })))
       .onConflictDoNothing();
+  }
+
+  // ======================================== END HELPER ======================================== //
+
+  /**
+   * Menggabungkan count Articles & Article Categories dalam satu payload.
+   * - Articles dibucket berdasarkan `articles.createdAt`
+   * - Categories dibucket berdasarkan `article_categories.createdAt`
+   * - period: 'day'|'week'|'month'|'year'|'all' (default: 'all')
+   * - from, to: ISO date (opsional; jika period ≠ 'all' & tidak diisi -> default)
+   */
+  async countArticlesAndCategories(params: {
+    period?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const period = this.parsePeriod(params.period);
+    const { from, to } = this.normalizeRange(period, params.from, params.to);
+
+    // WHERE untuk articles
+    const whereArt: any[] = [];
+    if (from) whereArt.push(gte(articles.createdAt as any, from));
+    if (to) whereArt.push(lte(articles.createdAt as any, to));
+    const whereArticles = whereArt.length ? and(...whereArt) : undefined;
+
+    // WHERE untuk categories
+    const whereCat: any[] = [];
+    if (from) whereCat.push(gte(articleCategories.createdAt as any, from));
+    if (to) whereCat.push(lte(articleCategories.createdAt as any, to));
+    const whereCategories = whereCat.length ? and(...whereCat) : undefined;
+
+    // ALL → total saja
+    if (period === 'all') {
+      const [artTotalRows, catTotalRows] = await Promise.all([
+        this.db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(articles as any)
+          .where(whereArticles),
+        this.db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(articleCategories as any)
+          .where(whereCategories),
+      ]);
+
+      const totalArticles = artTotalRows[0]?.total ?? 0;
+      const totalCategories = catTotalRows[0]?.total ?? 0;
+
+      return {
+        success: true,
+        time: new Date().toISOString(),
+        period,
+        from: from?.toISOString() ?? null,
+        to: to?.toISOString() ?? null,
+        articles: {
+          total: totalArticles,
+          buckets: [] as Array<{ start: string; count: number }>,
+        },
+        categories: {
+          total: totalCategories,
+          buckets: [] as Array<{ start: string; count: number }>,
+        },
+      };
+    }
+
+    // Bucketing pakai date_trunc
+    const artBucketExpr = sql<Date>`date_trunc(${sql.raw(`'${period}'`)}, ${articles.createdAt})`;
+    const catBucketExpr = sql<Date>`date_trunc(${sql.raw(`'${period}'`)}, ${articleCategories.createdAt})`;
+
+    const [artTotalRows, artBucketRows, catTotalRows, catBucketRows] =
+      await Promise.all([
+        this.db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(articles as any)
+          .where(whereArticles),
+        this.db
+          .select({
+            bucketStart: artBucketExpr,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(articles as any)
+          .where(whereArticles)
+          .groupBy(artBucketExpr)
+          .orderBy(asc(artBucketExpr)),
+        this.db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(articleCategories as any)
+          .where(whereCategories),
+        this.db
+          .select({
+            bucketStart: catBucketExpr,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(articleCategories as any)
+          .where(whereCategories)
+          .groupBy(catBucketExpr)
+          .orderBy(asc(catBucketExpr)),
+      ]);
+
+    const totalArticles = artTotalRows[0]?.total ?? 0;
+    const totalCategories = catTotalRows[0]?.total ?? 0;
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      period,
+      from: from?.toISOString() ?? null,
+      to: to?.toISOString() ?? null,
+      articles: {
+        total: totalArticles,
+        buckets: artBucketRows.map((r) => ({
+          start:
+            r.bucketStart instanceof Date
+              ? r.bucketStart.toISOString()
+              : String(r.bucketStart),
+          count: r.count,
+        })),
+      },
+      categories: {
+        total: totalCategories,
+        buckets: catBucketRows.map((r) => ({
+          start:
+            r.bucketStart instanceof Date
+              ? r.bucketStart.toISOString()
+              : String(r.bucketStart),
+          count: r.count,
+        })),
+      },
+    };
   }
 
   // ==== CATEGORY API ====

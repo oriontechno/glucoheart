@@ -8,7 +8,18 @@ import {
 } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { users } from '../db/schema';
-import { and, asc, desc, eq, ilike, inArray, sql, ne } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  sql,
+  ne,
+  lte,
+  gte,
+} from 'drizzle-orm';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import * as bcrypt from 'bcrypt';
@@ -19,6 +30,8 @@ import { validatePasswordStrength } from './password.policy';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+
+type Period = 'day' | 'week' | 'month' | 'year' | 'all';
 
 @Injectable()
 export class UsersService {
@@ -57,6 +70,18 @@ export class UsersService {
       .map((r) => r.toUpperCase());
     return list.length ? list : null;
   }
+
+  // private parseRoles(raw?: string | null): string[] {
+  //   if (!raw) return []; // ← kembalikan array kosong, bukan null
+  //   return Array.from(
+  //     new Set(
+  //       raw
+  //         .split('.')
+  //         .map((r) => r.trim().toUpperCase())
+  //         .filter(Boolean),
+  //     ),
+  //   );
+  // }
 
   private buildWhere(params: { roles?: string; search?: string }) {
     const conds: any[] = [];
@@ -159,6 +184,131 @@ export class UsersService {
 
     const abs = join(process.cwd(), oldUrl.replace(/^\//, ''));
     await fs.unlink(abs).catch(() => {});
+  }
+
+  private parsePeriod(raw?: string): Period {
+    const v = String(raw ?? 'all').toLowerCase();
+    if (
+      v === 'day' ||
+      v === 'week' ||
+      v === 'month' ||
+      v === 'year' ||
+      v === 'all'
+    )
+      return v;
+    throw new BadRequestException(
+      'Invalid period. Use day|week|month|year|all',
+    );
+  }
+
+  private computeDefaultRange(period: Period): { from?: Date; to?: Date } {
+    if (period === 'all') return {};
+    const to = new Date();
+    const from = new Date(to);
+    switch (period) {
+      case 'day':
+        from.setDate(to.getDate() - 1); // 1 hari terakhir
+        break;
+      case 'week':
+        from.setDate(to.getDate() - 7); // 1 minggu terakhir
+        break;
+      case 'month':
+        from.setMonth(to.getMonth() - 1); // 1 bulan terakhir
+        break;
+      case 'year':
+        from.setFullYear(to.getFullYear() - 1); // 1 tahun terakhir
+        break;
+    }
+    return { from, to };
+  }
+
+  private normalizeRange(period: Period, from?: string, to?: string) {
+    const def = this.computeDefaultRange(period);
+    const f = from ? new Date(from) : def.from;
+    const t = to ? new Date(to) : def.to;
+    if (f && isNaN(+f)) throw new BadRequestException('Invalid from date');
+    if (t && isNaN(+t)) throw new BadRequestException('Invalid to date');
+    return { from: f, to: t };
+  }
+
+  // ================================== End Helper ============================================= //
+
+  /**
+   * Query:
+   * - period: 'day' | 'week' | 'month' | 'year' | 'all' (default: 'all')
+   * - from, to: ISO date (opsional; jika period ≠ 'all' & tak diisi -> default)
+   * - roles: "user.admin" (opsional)
+   */
+  async countUsers(params: {
+    period?: string; // 'day' | 'week' | 'month' | 'year' | 'all'
+    from?: string; // ISO date (opsional)
+    to?: string; // ISO date (opsional)
+    roles?: string; // "user.admin.support" -> pakai helper parseRoles
+  }) {
+    // --- period ---
+    const period = this.parsePeriod(params.period);
+    const { from, to } = this.normalizeRange(period, params.from, params.to);
+    if (from && isNaN(+from))
+      throw new BadRequestException('Invalid from date');
+    if (to && isNaN(+to)) throw new BadRequestException('Invalid to date');
+
+    // --- roles (pakai helper) ---
+    const roleList = this.parseRoles(params.roles); // <- string[] | null
+
+    // --- WHERE ---
+    const whereParts: any[] = [];
+    if (from) whereParts.push(gte(users.createdAt as any, from));
+    if (to) whereParts.push(lte(users.createdAt as any, to));
+    if (roleList?.length) whereParts.push(inArray(users.role as any, roleList));
+    const where = whereParts.length ? and(...whereParts) : undefined;
+
+    // --- ALL (total saja; jika from/to diisi -> total dalam range tsb) ---
+    if (period === 'all') {
+      const [{ total }] = await this.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(users as any)
+        .where(where);
+      return {
+        success: true,
+        time: new Date().toISOString(),
+        period,
+        from: from?.toISOString() ?? null,
+        to: to?.toISOString() ?? null,
+        total,
+        buckets: [],
+      };
+    }
+
+    // --- Bucketing pakai date_trunc tanpa timezone ---
+    const bucketExpr = sql<Date>`date_trunc(${sql.raw(`'${period}'`)}, ${users.createdAt})`;
+
+    const rows = await this.db
+      .select({
+        bucketStart: bucketExpr,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(users as any)
+      .where(where)
+      .groupBy(bucketExpr)
+      .orderBy(asc(bucketExpr));
+
+    const total = rows.reduce((acc, r) => acc + (r.count ?? 0), 0);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      period,
+      from: from?.toISOString() ?? null,
+      to: to?.toISOString() ?? null,
+      total,
+      buckets: rows.map((r) => ({
+        start:
+          r.bucketStart instanceof Date
+            ? r.bucketStart.toISOString()
+            : String(r.bucketStart),
+        count: r.count,
+      })),
+    };
   }
 
   // ========== User ganti avatar miliknya ==========

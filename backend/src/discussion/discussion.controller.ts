@@ -27,6 +27,15 @@ import { RequestUser } from './types';
 export class DiscussionController {
   constructor(private readonly svc: DiscussionService) {}
 
+  @Get('rooms/count')
+  async countRooms(
+    @Query('period') period?: string, // day|week|month|year|all
+    @Query('from') from?: string, // ISO date (opsional)
+    @Query('to') to?: string, // ISO date (opsional)
+  ) {
+    return this.svc.countRooms({ period, from, to });
+  }
+
   @Get('all')
   async getAllSimple(
     @Query('search') search?: string,

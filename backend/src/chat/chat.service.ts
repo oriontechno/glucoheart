@@ -5,7 +5,18 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  sql,
+  gte,
+  lte,
+  not,
+  isNull,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   chatSessionParticipants,
@@ -25,6 +36,9 @@ import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Inject } from '@nestjs/common';
 
 type Acting = { id: number; role?: string };
+
+type Period = 'day' | 'week' | 'month' | 'year' | 'all';
+type SessionType = 'one_to_one' | 'group';
 
 @Injectable()
 export class ChatService {
@@ -82,6 +96,150 @@ export class ChatService {
       senderName: fullName || undefined,
       senderAvatar: row.profilePicture || undefined,
       senderRole: row.role || undefined, // <— penting: role pengirim
+    };
+  }
+
+  private parsePeriod(raw?: string): Period {
+    const v = String(raw ?? 'all').toLowerCase();
+    if (
+      v === 'day' ||
+      v === 'week' ||
+      v === 'month' ||
+      v === 'year' ||
+      v === 'all'
+    )
+      return v;
+    throw new BadRequestException(
+      'Invalid period. Use day|week|month|year|all',
+    );
+  }
+
+  private computeDefaultRange(period: Period): { from?: Date; to?: Date } {
+    if (period === 'all') return {};
+    const to = new Date();
+    const from = new Date(to);
+    switch (period) {
+      case 'day':
+        from.setDate(to.getDate() - 1); // 1 hari terakhir
+        break;
+      case 'week':
+        from.setDate(to.getDate() - 7);
+        break;
+      case 'month':
+        from.setMonth(to.getMonth() - 1); // 1 bulan terakhir
+        break;
+      case 'year':
+        from.setFullYear(to.getFullYear() - 1); // 1 tahun terakhir
+        break;
+    }
+    return { from, to };
+  }
+
+  private normalizeRange(period: Period, from?: string, to?: string) {
+    const def = this.computeDefaultRange(period);
+    const f = from ? new Date(from) : def.from;
+    const t = to ? new Date(to) : def.to;
+    if (f && isNaN(+f)) throw new BadRequestException('Invalid from date');
+    if (t && isNaN(+t)) throw new BadRequestException('Invalid to date');
+    return { from: f, to: t };
+  }
+
+  private parseType(raw?: string): SessionType | null {
+    if (!raw || raw.toLowerCase() === 'all') return null;
+    const v = raw.toLowerCase();
+    if (v === 'one_to_one' || v === 'group') return v as SessionType;
+    throw new BadRequestException('Invalid type. Use one_to_one|group|all');
+  }
+
+  private parseAssigned(raw?: string): boolean | null {
+    if (raw === undefined || raw === null || raw === '') return null;
+    const v = String(raw).toLowerCase();
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+    throw new BadRequestException('Invalid assigned. Use true|false');
+  }
+
+  // ==================================== END HELPER ==================================== //
+
+  /**
+   * Hitung jumlah chatSessions dengan opsi range/period/type/assigned.
+   * Query:
+   * - period: 'day'|'week'|'month'|'year'|'all'
+   * - from, to: ISO date (opsional)
+   * - type: 'one_to_one'|'group'|'all' (default: all)
+   * - assigned: 'true'|'false' (opsional) -> cek assignedNurseId null / non-null
+   */
+  async countSessions(params: {
+    period?: string;
+    from?: string;
+    to?: string;
+    type?: string;
+    assigned?: string;
+  }) {
+    const period = this.parsePeriod(params.period);
+    const { from, to } = this.normalizeRange(period, params.from, params.to);
+    const type = this.parseType(params.type);
+    const assigned = this.parseAssigned(params.assigned);
+
+    // WHERE
+    const whereParts: any[] = [];
+    if (from) whereParts.push(gte(chatSessions.createdAt as any, from));
+    if (to) whereParts.push(lte(chatSessions.createdAt as any, to));
+    if (type) whereParts.push(eq(chatSessions.type as any, type));
+    if (assigned === true)
+      whereParts.push(not(isNull(chatSessions.assignedNurseId as any)));
+    if (assigned === false)
+      whereParts.push(isNull(chatSessions.assignedNurseId as any));
+    const where = whereParts.length ? and(...whereParts) : undefined;
+
+    // ALL = total saja (atau total di dalam range jika from/to ada)
+    if (period === 'all') {
+      const [{ total }] = await this.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(chatSessions as any)
+        .where(where);
+      return {
+        success: true,
+        time: new Date().toISOString(),
+        period,
+        from: from?.toISOString() ?? null,
+        to: to?.toISOString() ?? null,
+        filters: { type: type ?? 'all', assigned: assigned ?? null },
+        total,
+        buckets: [],
+      };
+    }
+
+    // bucket per period (pakai createdAt)
+    const bucketExpr = sql<Date>`date_trunc(${sql.raw(`'${period}'`)}, ${chatSessions.createdAt})`;
+
+    const rows = await this.db
+      .select({
+        bucketStart: bucketExpr,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(chatSessions as any)
+      .where(where)
+      .groupBy(bucketExpr)
+      .orderBy(asc(bucketExpr));
+
+    const total = rows.reduce((acc, r) => acc + (r.count ?? 0), 0);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      period,
+      from: from?.toISOString() ?? null,
+      to: to?.toISOString() ?? null,
+      filters: { type: type ?? 'all', assigned: assigned ?? null },
+      total,
+      buckets: rows.map((r) => ({
+        start:
+          r.bucketStart instanceof Date
+            ? r.bucketStart.toISOString()
+            : String(r.bucketStart),
+        count: r.count,
+      })),
     };
   }
 

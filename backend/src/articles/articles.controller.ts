@@ -71,6 +71,19 @@ const multerImageOptions = {
 @Controller('articles')
 export class ArticlesController {
   constructor(private readonly svc: ArticlesService) {}
+  // Count gabungan Articles & Categories
+  @Get('count')
+  async countArticlesAndCategories(
+    @Query('period') period?: string, // day|week|month|year|all
+    @Query('from') from?: string, // ISO date
+    @Query('to') to?: string, // ISO date
+  ) {
+    return this.svc.countArticlesAndCategories({
+      period,
+      from,
+      to,
+    });
+  }
 
   // Update existing list/search to accept ?categories=slug1.slug2
   @Get('all')
