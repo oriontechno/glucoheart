@@ -17,7 +17,7 @@ type AuthedSocket = Socket & {
   data: { user?: { id: number; role?: string; email?: string } };
 };
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({ namespace: 'discussion', cors: { origin: '*' } })
 @UseGuards(WsJwtGuard)
 export class DiscussionGateway {
   @WebSocketServer() server: Server;
