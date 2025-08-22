@@ -28,8 +28,6 @@ export default async function DiscussionListing() {
     discussions = discussionsResponse.data.discussions;
   }
 
-  console.log({ discussions });
-
   // Get current user from iron session
   const sessionUser = await DiscussionServerService.getCurrentUser();
 

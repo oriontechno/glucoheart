@@ -42,9 +42,8 @@ export class DiscussionWebSocketService {
     });
 
     this.socket.on('connect', () => {
-      console.log('Discussion WebSocket connected');
       this.reconnectAttempts = 0;
-      
+
       // Set ready flag after a small delay to ensure socket is fully initialized
       setTimeout(() => {
         this.isReady = true;
@@ -53,7 +52,6 @@ export class DiscussionWebSocketService {
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('Discussion WebSocket disconnected:', reason);
       this.isReady = false;
       this.onConnectionChange?.(false);
 
@@ -76,8 +74,6 @@ export class DiscussionWebSocketService {
     this.socket.on(
       'discussion.message.created',
       (data: DiscussionWebSocketMessage) => {
-        console.log('Received discussion message:', data);
-
         // Convert websocket message format to DiscussionMessage format
         const discussionMessage: DiscussionMessage = {
           id: data.id,
@@ -102,7 +98,6 @@ export class DiscussionWebSocketService {
 
     // Listen for room updates (for discussion list)
     this.socket.on('discussion.room.updated', (data: any) => {
-      console.log('Discussion room updated:', data);
       this.onRoomUpdate?.(data);
     });
   }
@@ -115,10 +110,6 @@ export class DiscussionWebSocketService {
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-
-    console.log(
-      `Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
-    );
 
     setTimeout(() => {
       this.connect();
@@ -133,7 +124,6 @@ export class DiscussionWebSocketService {
     return new Promise((resolve, reject) => {
       this.socket!.emit('discussion.join', { roomId }, (response: any) => {
         if (response?.ok) {
-          console.log(`Joined discussion room ${roomId}`);
           resolve(response);
         } else {
           console.error(
@@ -153,7 +143,6 @@ export class DiscussionWebSocketService {
 
     return new Promise((resolve) => {
       this.socket!.emit('discussion.leave', { roomId }, () => {
-        console.log(`Left discussion room ${roomId}`);
         resolve();
       });
     });
@@ -167,7 +156,6 @@ export class DiscussionWebSocketService {
     return new Promise((resolve, reject) => {
       this.socket!.emit('discussion.lobby.join', {}, (response: any) => {
         if (response?.ok) {
-          console.log('Joined discussion lobby');
           resolve(response);
         } else {
           console.error('Failed to join discussion lobby:', response?.error);
@@ -184,7 +172,6 @@ export class DiscussionWebSocketService {
 
     return new Promise((resolve) => {
       this.socket!.emit('discussion.lobby.leave', {}, () => {
-        console.log('Left discussion lobby');
         resolve();
       });
     });
@@ -201,7 +188,6 @@ export class DiscussionWebSocketService {
         { roomId, content },
         (response: any) => {
           if (response?.ok) {
-            console.log(`Message sent to discussion room ${roomId}`);
             resolve(response);
           } else {
             console.error(

@@ -73,10 +73,6 @@ export class DiscussionServerService {
         ...authConfig
       });
 
-      console.log({
-        discussions: response.data.response || response.data.discussions
-      });
-
       return {
         success: true,
         data: {
