@@ -293,31 +293,36 @@ export class DiscussionService {
     if (!rooms.length) return rooms.map((r) => ({ ...r, lastMessage: null }));
 
     // ambil lastMessage lengkap dengan user
-    const lastIds = rooms.filter(r => r.lastMessageId).map(r => r.lastMessageId!);
-    const lastRows = lastIds.length ? await this.db
-      .select({
-        id: discussionMessages.id,
-        roomId: discussionMessages.roomId,
-        senderId: discussionMessages.senderId,
-        content: discussionMessages.content,
-        createdAt: discussionMessages.createdAt,
-        firstName: users.firstName,
-        lastName: users.lastName,
-        profilePicture: users.profilePicture,
-      })
-      .from(discussionMessages)
-      .leftJoin(users, eq(users.id, discussionMessages.senderId))
-      .where(inArray(discussionMessages.id, lastIds))
-    : [];
+    const lastIds = rooms
+      .filter((r) => r.lastMessageId)
+      .map((r) => r.lastMessageId!);
+    const lastRows = lastIds.length
+      ? await this.db
+          .select({
+            id: discussionMessages.id,
+            roomId: discussionMessages.roomId,
+            senderId: discussionMessages.senderId,
+            content: discussionMessages.content,
+            createdAt: discussionMessages.createdAt,
+            firstName: users.firstName,
+            lastName: users.lastName,
+            profilePicture: users.profilePicture,
+          })
+          .from(discussionMessages)
+          .leftJoin(users, eq(users.id, discussionMessages.senderId))
+          .where(inArray(discussionMessages.id, lastIds))
+      : [];
 
-    const lastMap = new Map(lastRows.map(r => [r.id, this.mapMessageRow(r)]));
+    const lastMap = new Map(lastRows.map((r) => [r.id, this.mapMessageRow(r)]));
 
     return rooms.map((r) => ({
       ...r,
-      lastMessage: r.lastMessageId ? (lastMap.get(r.lastMessageId) ?? null) : null,
+      lastMessage: r.lastMessageId
+        ? (lastMap.get(r.lastMessageId) ?? null)
+        : null,
     }));
   }
-  
+
   private async ensureCanPost(roomId: number, userId: number) {
     const [room] = await this.db
       .select()
@@ -352,27 +357,34 @@ export class DiscussionService {
     senderId: number,
     dto: DiscussionSendMessageDto,
   ) {
+    // 1) Validasi & normalisasi konten
+    let content = (dto?.content ?? '').trim();
+    if (!content) throw new BadRequestException('content is required');
+
+    // 2) Hormati aturan (room publik, ban/mute, dsb)
     await this.ensureCanPost(roomId, senderId);
 
+    // 3) Insert message + bump room (pakai createdAt dari insert)
     const inserted = await this.db.transaction(async (tx) => {
       const [msg] = await tx
         .insert(discussionMessages)
-        .values({ roomId, senderId, content: dto.content })
+        .values({ roomId, senderId, content })
         .returning();
 
+      const ts = msg.createdAt ?? new Date();
       await tx
         .update(discussionRooms)
         .set({
           lastMessageId: msg.id,
-          lastMessageAt: new Date(),
-          updatedAt: new Date(),
+          lastMessageAt: ts,
+          updatedAt: ts,
         })
         .where(eq(discussionRooms.id, roomId));
 
       return msg;
     });
 
-    // ambil lagi lengkap dengan user untuk response + broadcast
+    // 4) Ambil lagi lengkap dengan info user (TERMASUK role) untuk payload & broadcast
     const [row] = await this.db
       .select({
         id: discussionMessages.id,
@@ -383,16 +395,45 @@ export class DiscussionService {
         firstName: users.firstName,
         lastName: users.lastName,
         profilePicture: users.profilePicture,
+        role: users.role as any,
       })
       .from(discussionMessages)
       .leftJoin(users, eq(users.id, discussionMessages.senderId))
       .where(eq(discussionMessages.id, inserted.id))
       .limit(1);
 
-    const payload = this.mapMessageRow(row);
+    if (!row) {
+      throw new InternalServerErrorException(
+        'Message persisted but could not be reloaded',
+      );
+    }
 
-    // event untuk websocket/gateway (kalau ada)
-    this.events.emit('discussion.message.created', payload);
+    // 5) Bentuk payload final (pakai helper jika ada)
+    const payload =
+      typeof this.mapMessageRow === 'function'
+        ? this.mapMessageRow(row)
+        : {
+            id: row.id,
+            roomId: row.roomId,
+            sender: {
+              id: row.senderId,
+              firstName: row.firstName,
+              lastName: row.lastName,
+              profilePicture: row.profilePicture,
+              role: row.role,
+            },
+            content: row.content,
+            createdAt: row.createdAt,
+          };
+
+    // 6) Emit event dengan senderRole dari DB (bukan dari payload) → menghindari error TS
+    const senderRole = row.role as string | undefined;
+
+    this.events.emit('discussion.message.created', {
+      roomId,
+      message: payload,
+      senderRole,
+    });
 
     return payload;
   }
@@ -428,7 +469,7 @@ export class DiscussionService {
     profilePicture?: string | null;
   }) {
     const first = (row.firstName ?? '').trim();
-    const last  = (row.lastName ?? '').trim();
+    const last = (row.lastName ?? '').trim();
     const fullName = `${first} ${last}`.trim();
 
     return {
@@ -437,9 +478,8 @@ export class DiscussionService {
       senderId: row.senderId,
       content: row.content,
       createdAt: row.createdAt,
-      senderName: fullName || undefined,         // biar frontend kebaca
+      senderName: fullName || undefined, // biar frontend kebaca
       senderAvatar: row.profilePicture || undefined,
     };
   }
-  
 }
