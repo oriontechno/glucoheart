@@ -26,6 +26,15 @@ import { RequestUser } from './types';
 export class ChatController {
   constructor(private readonly chat: ChatService) {}
 
+  @Get('metrics/growth')
+  async growthChatSessions(
+    @Query('period') period?: string, // day|week|month|year (default: month)
+    @Query('from') from?: string, // ISO date (opsional)
+    @Query('to') to?: string, // ISO date (opsional)
+  ) {
+    return this.chat.growthChatSessions({ period, from, to });
+  }
+
   // ========== ADMIN/SUPPORT: Read messages dari sesi mana pun ==========
   @Get('admin/sessions/:sessionId/messages')
   async adminFetchMessages(

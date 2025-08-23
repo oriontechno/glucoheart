@@ -5,7 +5,7 @@ import {
   BadRequestException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, sql, gte, lte } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql, gte, lte, lt } from 'drizzle-orm';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { Inject } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -139,7 +139,163 @@ export class DiscussionService {
     return { from: f, to: t };
   }
 
+  // ===== Helpers (sama seperti di articles/chats) =====
+  private parseChartPeriod(raw?: string): Period {
+    const v = String(raw ?? 'month').toLowerCase();
+    if (v === 'day' || v === 'week' || v === 'month' || v === 'year')
+      return v as Period;
+    throw new BadRequestException('period must be one of: day|week|month|year');
+  }
+
+  private defaultRange(period: Period): { from: Date; to: Date } {
+    const to = new Date();
+    const from = new Date(to);
+    switch (period) {
+      case 'day':
+        from.setDate(to.getDate() - 29);
+        break; // 30 hari
+      case 'week':
+        from.setDate(to.getDate() - 7 * 11);
+        break; // 12 minggu
+      case 'month':
+        from.setMonth(to.getMonth() - 11);
+        break; // 12 bulan
+      case 'year':
+        from.setFullYear(to.getFullYear() - 4);
+        break; // 5 tahun
+    }
+    return { from, to };
+  }
+
+  // floor FROM ke awal bucket; TO → toExclusive = awal bucket berikutnya
+  private normalizeRangeForChart(period: Period, from?: string, to?: string) {
+    const def = this.defaultRange(period);
+    const rawFrom = from ? new Date(from) : def.from;
+    const rawTo = to ? new Date(to) : def.to;
+    if (isNaN(+rawFrom) || isNaN(+rawTo))
+      throw new BadRequestException('Invalid from/to date');
+
+    const fromAligned = this.floorToPeriodStart(period, rawFrom);
+    const toAlignedStart = this.floorToPeriodStart(period, rawTo);
+    const toExclusive = this.addOneStep(period, toAlignedStart);
+
+    if (fromAligned.getTime() >= toExclusive.getTime()) {
+      throw new BadRequestException('from must be before to');
+    }
+    return {
+      fromAligned,
+      toExclusive,
+      originalFrom: rawFrom,
+      originalTo: rawTo,
+    };
+  }
+
+  private floorToPeriodStart(period: Period, d: Date): Date {
+    const x = new Date(d);
+    x.setMilliseconds(0);
+    x.setSeconds(0);
+    x.setMinutes(0);
+    x.setHours(0);
+    if (period === 'day') return x;
+    if (period === 'week') {
+      // date_trunc('week') → Senin 00:00
+      const dow = x.getDay(); // 0=Min..6=Sab
+      const delta = (dow + 6) % 7;
+      x.setDate(x.getDate() - delta);
+      return x;
+    }
+    if (period === 'month') {
+      x.setDate(1);
+      return x;
+    }
+    x.setMonth(0, 1); // year
+    return x;
+  }
+
+  private addOneStep(period: Period, d: Date): Date {
+    const x = new Date(d);
+    if (period === 'day') {
+      x.setDate(x.getDate() + 1);
+      return x;
+    }
+    if (period === 'week') {
+      x.setDate(x.getDate() + 7);
+      return x;
+    }
+    if (period === 'month') {
+      x.setMonth(x.getMonth() + 1);
+      return x;
+    }
+    x.setFullYear(x.getFullYear() + 1);
+    return x; // year
+  }
+
   // ================================== END HELPER ============================================== //
+
+  // ====== SERVICE: growth discussion rooms ======
+  async growthDiscussionRooms(params: {
+    period?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const period = this.parseChartPeriod(params.period);
+    const { fromAligned, toExclusive, originalFrom, originalTo } =
+      this.normalizeRangeForChart(period, params.from, params.to);
+
+    const bucketExpr = sql<Date>`date_trunc(${sql.raw(`'${period}'`)}, ${discussionRooms.createdAt})`;
+
+    // agregasi per bucket (yang ada datanya)
+    const rows = await this.db
+      .select({
+        bucketStart: bucketExpr,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(discussionRooms as any)
+      .where(
+        and(
+          gte(discussionRooms.createdAt as any, fromAligned),
+          lt(discussionRooms.createdAt as any, toExclusive),
+        ),
+      )
+      .groupBy(bucketExpr)
+      .orderBy(asc(bucketExpr));
+
+    // map bucket → count
+    const map = new Map<number, number>();
+    for (const r of rows) {
+      const d =
+        r.bucketStart instanceof Date
+          ? r.bucketStart
+          : new Date(r.bucketStart as any);
+      map.set(d.getTime(), r.count ?? 0);
+    }
+
+    // bangun deret bucket lengkap (bucket kosong = 0)
+    const buckets: { start: string; count: number }[] = [];
+    for (
+      let cur = new Date(fromAligned);
+      cur.getTime() < toExclusive.getTime();
+      cur = this.addOneStep(period, cur)
+    ) {
+      const ts = cur.getTime();
+      buckets.push({
+        start: new Date(ts).toISOString(),
+        count: map.get(ts) ?? 0,
+      });
+    }
+
+    const total = buckets.reduce((a, b) => a + b.count, 0);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      period,
+      from: originalFrom.toISOString(),
+      to: originalTo.toISOString(),
+      total,
+      buckets,
+    };
+  }
 
   /**
    * Hitung jumlah discussion rooms (grup) dengan opsi range & period.
