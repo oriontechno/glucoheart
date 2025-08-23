@@ -27,6 +27,15 @@ import { RequestUser } from './types';
 export class DiscussionController {
   constructor(private readonly svc: DiscussionService) {}
 
+  @Get('metrics/growth')
+  async growthDiscussionRooms(
+    @Query('period') period?: string, // day|week|month|year (default: month)
+    @Query('from') from?: string, // ISO date (optional)
+    @Query('to') to?: string, // ISO date (optional)
+  ) {
+    return this.svc.growthDiscussionRooms({ period, from, to });
+  }
+
   @Get('rooms/count')
   async countRooms(
     @Query('period') period?: string, // day|week|month|year|all

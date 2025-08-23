@@ -71,6 +71,34 @@ const multerImageOptions = {
 @Controller('articles')
 export class ArticlesController {
   constructor(private readonly svc: ArticlesService) {}
+
+  @Get('metrics/pie/categories')
+  async pieArticlesByCategory(
+    @Query('status') status?: string, // published|draft|all (default published)
+    @Query('from') from?: string, // ISO date
+    @Query('to') to?: string, // ISO date
+    @Query('dateField') dateField?: string, // created|published (default created)
+    @Query('includeUncategorized') includeUncategorized?: string, // true|false (default false)
+    @Query('topN') topN?: string, // number (optional)
+  ) {
+    return this.svc.pieArticlesByCategory({
+      status,
+      from,
+      to,
+      dateField,
+      includeUncategorized,
+      topN,
+    });
+  }
+
+  @Get('metrics/growth')
+  async growthArticles(
+    @Query('period') period?: string, // day|week|month|year (default: month)
+    @Query('from') from?: string, // ISO date (opsional)
+    @Query('to') to?: string, // ISO date (opsional)
+  ) {
+    return this.svc.growthArticles({ period, from, to });
+  }
   // Count gabungan Articles & Categories
   @Get('count')
   async countArticlesAndCategories(

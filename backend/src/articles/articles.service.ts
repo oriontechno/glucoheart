@@ -21,6 +21,8 @@ import {
   or,
   gte,
   lte,
+  lt,
+  isNull,
 } from 'drizzle-orm';
 import {
   articles,
@@ -44,12 +46,33 @@ type CategoryRow = typeof articleCategories.$inferSelect;
 
 type Period = 'day' | 'week' | 'month' | 'year' | 'all';
 
+type PieParams = {
+  status?: string; // 'published' | 'draft' | 'all'
+  from?: string; // ISO date
+  to?: string; // ISO date
+  dateField?: string; // 'created' | 'published'
+  includeUncategorized?: string | boolean;
+  topN?: string | number;
+};
+
 @Injectable()
 export class ArticlesService {
   constructor(
     @Inject('DATABASE_CONNECTION')
     private readonly db: NodePgDatabase<typeof import('../db/schema')>,
   ) {}
+
+  private toBool(v: string | boolean | undefined, def = false) {
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'string') return v.toLowerCase() === 'true';
+    return def;
+  }
+
+  private toNum(v: string | number | undefined): number | undefined {
+    if (v === undefined) return undefined;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  }
 
   private parsePeriod(raw?: string): Period {
     const v = String(raw ?? 'all').toLowerCase();
@@ -436,8 +459,319 @@ export class ArticlesService {
       .onConflictDoNothing();
   }
 
+  // ========== helpers ==========
+  private parseChartPeriod(raw?: string): Period {
+    const v = String(raw ?? 'month').toLowerCase();
+    if (v === 'day' || v === 'week' || v === 'month' || v === 'year')
+      return v as Period;
+    throw new BadRequestException('period must be one of: day|week|month|year');
+  }
+
+  private defaultRange(period: Period): { from: Date; to: Date } {
+    const to = new Date();
+    const from = new Date(to);
+    switch (period) {
+      case 'day':
+        from.setDate(to.getDate() - 29);
+        break; // 30 hari terakhir
+      case 'week':
+        from.setDate(to.getDate() - 7 * 11);
+        break; // 12 minggu terakhir
+      case 'month':
+        from.setMonth(to.getMonth() - 11);
+        break; // 12 bulan terakhir
+      case 'year':
+        from.setFullYear(to.getFullYear() - 4);
+        break; // 5 tahun terakhir
+    }
+    return { from, to };
+  }
+
+  // floor FROM ke awal bucket, TAPI TO tidak diturunkan: kita buat toExclusive = floor(to)+step
+  private normalizeRangeForChart(period: Period, from?: string, to?: string) {
+    const def = this.defaultRange(period);
+    const rawFrom = from ? new Date(from) : def.from;
+    const rawTo = to ? new Date(to) : def.to;
+    if (isNaN(+rawFrom) || isNaN(+rawTo))
+      throw new BadRequestException('Invalid from/to date');
+
+    const fromAligned = this.floorToPeriodStart(period, rawFrom);
+    const toAlignedStart = this.floorToPeriodStart(period, rawTo);
+    const toExclusive = this.addOneStep(period, toAlignedStart); // <— batas atas eksklusif
+
+    if (fromAligned.getTime() >= toExclusive.getTime()) {
+      throw new BadRequestException('from must be before to');
+    }
+
+    return {
+      fromAligned,
+      toExclusive,
+      originalFrom: rawFrom,
+      originalTo: rawTo,
+    };
+  }
+
+  // Samakan dengan date_trunc
+  private floorToPeriodStart(period: Period, d: Date): Date {
+    const x = new Date(d);
+    x.setMilliseconds(0);
+    x.setSeconds(0);
+    x.setMinutes(0);
+    x.setHours(0);
+    if (period === 'day') return x;
+    if (period === 'week') {
+      // Postgres date_trunc('week') -> Senin 00:00
+      const dow = x.getDay(); // 0=Min..6=Sab
+      const delta = (dow + 6) % 7; // mundur ke Senin
+      x.setDate(x.getDate() - delta);
+      return x;
+    }
+    if (period === 'month') {
+      x.setDate(1);
+      return x;
+    }
+    // year
+    x.setMonth(0, 1);
+    return x;
+  }
+
+  private addOneStep(period: Period, d: Date): Date {
+    const x = new Date(d);
+    if (period === 'day') {
+      x.setDate(x.getDate() + 1);
+      return x;
+    }
+    if (period === 'week') {
+      x.setDate(x.getDate() + 7);
+      return x;
+    }
+    if (period === 'month') {
+      x.setMonth(x.getMonth() + 1);
+      return x;
+    }
+    x.setFullYear(x.getFullYear() + 1);
+    return x; // year
+  }
+
   // ======================================== END HELPER ======================================== //
 
+  async pieArticlesByCategory(params: PieParams) {
+    const status = (params.status ?? 'published').toLowerCase();
+    if (!['published', 'draft', 'all'].includes(status)) {
+      throw new BadRequestException('status must be published|draft|all');
+    }
+    const dateField = (params.dateField ?? 'created').toLowerCase();
+    if (!['created', 'published'].includes(dateField)) {
+      throw new BadRequestException('dateField must be created|published');
+    }
+
+    const from = params.from ? new Date(params.from) : undefined;
+    const to = params.to ? new Date(params.to) : undefined;
+    if ((from && isNaN(+from)) || (to && isNaN(+to))) {
+      throw new BadRequestException('Invalid from/to date');
+    }
+
+    const includeUncategorized = this.toBool(
+      params.includeUncategorized,
+      false,
+    );
+    const topN = this.toNum(params.topN);
+
+    // Kolom tanggal yang dipakai
+    const dateCol =
+      dateField === 'published'
+        ? (articles.publishedAt as any)
+        : (articles.createdAt as any);
+
+    // WHERE dasar untuk artikel
+    const baseWhere: any[] = [];
+    if (status !== 'all') {
+      baseWhere.push(eq(articles.status as any, status as any));
+    }
+    if (dateField === 'published') {
+      // pastikan publishedAt tidak null
+      baseWhere.push(sql`(${articles.publishedAt} is not null)`);
+    }
+    if (from) baseWhere.push(gte(dateCol, from));
+    if (to) baseWhere.push(lte(dateCol, to));
+    const whereClause = baseWhere.length ? and(...baseWhere) : undefined;
+
+    // --- Hitung distribusi per kategori (via join link) ---
+    const perCat = await this.db
+      .select({
+        id: articleCategories.id,
+        name: articleCategories.name,
+        slug: articleCategories.slug,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(articles as any)
+      .innerJoin(
+        articleCategoryLinks,
+        eq(articleCategoryLinks.articleId, articles.id),
+      )
+      .innerJoin(
+        articleCategories,
+        eq(articleCategories.id, articleCategoryLinks.categoryId),
+      )
+      .where(whereClause)
+      .groupBy(
+        articleCategories.id,
+        articleCategories.name,
+        articleCategories.slug,
+      )
+      .orderBy(desc(sql`count(*)`), asc(articleCategories.name));
+
+    // --- Optional: Uncategorized (artikel yang match whereClause tapi TANPA link kategori) ---
+    let uncategorizedCount = 0;
+    if (includeUncategorized) {
+      const unc = await this.db
+        .select({ c: sql<number>`count(*)::int` })
+        .from(articles as any)
+        .leftJoin(
+          articleCategoryLinks,
+          eq(articleCategoryLinks.articleId, articles.id),
+        )
+        .where(
+          and(whereClause ?? sql`true`, isNull(articleCategoryLinks.articleId)),
+        )
+        .limit(1);
+      uncategorizedCount = unc[0]?.c ?? 0;
+    }
+
+    // Total "assignment" (jumlah baris link kategori) — cocok untuk pie
+    let totalAssignments = perCat.reduce((sum, r) => sum + (r.count ?? 0), 0);
+    if (includeUncategorized) totalAssignments += uncategorizedCount;
+
+    // Optional: gabung ke "others" jika topN diberikan
+    let rows = [...perCat] as Array<{
+      id?: number;
+      name: string;
+      slug?: string;
+      count: number;
+      isOther?: boolean;
+    }>;
+
+    if (typeof topN === 'number') {
+      const head = rows.slice(0, topN);
+      const tail = rows.slice(topN);
+      const othersTotal =
+        tail.reduce((a, b) => a + b.count, 0) + (includeUncategorized ? 0 : 0);
+      rows = head;
+      if (othersTotal > 0) {
+        rows.push({ name: 'others', count: othersTotal, isOther: true });
+      }
+      // Jika includeUncategorized true, masukkan "Uncategorized" sebelum atau setelah others (di sini setelah head, sebelum others)
+      if (includeUncategorized && uncategorizedCount > 0) {
+        rows.push({ name: 'Uncategorized', count: uncategorizedCount });
+      }
+    } else {
+      if (includeUncategorized && uncategorizedCount > 0) {
+        rows.push({ name: 'Uncategorized', count: uncategorizedCount });
+      }
+    }
+
+    // Persentase
+    const items = rows.map((r) => ({
+      id: r.id ?? null,
+      name: r.name,
+      slug: r.slug ?? null,
+      count: r.count,
+      percentage:
+        totalAssignments > 0
+          ? Math.round((r.count / totalAssignments) * 10000) / 100
+          : 0,
+    }));
+
+    // Info tambahan: total artikel unik yang match filter (bukan total assignment)
+    const uniqueRows = await this.db
+      .select({ c: sql<number>`count(distinct ${articles.id})::int` })
+      .from(articles as any)
+      .where(whereClause);
+    const totalArticlesMatched = uniqueRows[0]?.c ?? 0;
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      filters: {
+        status,
+        dateField,
+        from: from?.toISOString() ?? null,
+        to: to?.toISOString() ?? null,
+        includeUncategorized,
+        topN: topN ?? null,
+      },
+      total_articles_matched: totalArticlesMatched,
+      total_assignments: totalAssignments,
+      categories: items,
+    };
+  }
+
+  // ====== SERVICE: growth time-series ======
+  // ========== SERVICE: growth ==========
+  async growthArticles(params: {
+    period?: string;
+    from?: string;
+    to?: string;
+  }) {
+    const period = this.parseChartPeriod(params.period);
+    const { fromAligned, toExclusive, originalFrom, originalTo } =
+      this.normalizeRangeForChart(period, params.from, params.to);
+
+    // SQL: pakai batas atas eksklusif (lt)
+    const bucketExpr = sql<Date>`date_trunc(${sql.raw(`'${period}'`)}, ${articles.createdAt})`;
+
+    const rows = await this.db
+      .select({
+        bucketStart: bucketExpr,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(articles as any)
+      .where(
+        and(
+          gte(articles.createdAt as any, fromAligned),
+          lt(articles.createdAt as any, toExclusive),
+        ),
+      )
+      .groupBy(bucketExpr)
+      .orderBy(asc(bucketExpr));
+
+    // map hasil ke bucket-start -> count
+    const map = new Map<number, number>();
+    for (const r of rows) {
+      const d =
+        r.bucketStart instanceof Date
+          ? r.bucketStart
+          : new Date(r.bucketStart as any);
+      map.set(d.getTime(), r.count ?? 0);
+    }
+
+    // Bangun semua bucket dari fromAligned s/d sebelum toExclusive
+    const buckets: { start: string; count: number }[] = [];
+    for (
+      let cur = new Date(fromAligned);
+      cur.getTime() < toExclusive.getTime();
+      cur = this.addOneStep(period, cur)
+    ) {
+      const ts = cur.getTime();
+      buckets.push({
+        start: new Date(ts).toISOString(),
+        count: map.get(ts) ?? 0,
+      });
+    }
+
+    const total = buckets.reduce((a, b) => a + b.count, 0);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      period,
+      // kembalikan from/to yang diminta user agar tidak “membingungkan”
+      from: originalFrom.toISOString(),
+      to: originalTo.toISOString(),
+      total,
+      buckets,
+    };
+  }
   /**
    * Menggabungkan count Articles & Article Categories dalam satu payload.
    * - Articles dibucket berdasarkan `articles.createdAt`
