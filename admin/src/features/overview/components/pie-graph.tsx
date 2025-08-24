@@ -159,7 +159,7 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
               Total Articles
             </span>
             <span className='text-lg leading-none font-bold sm:text-3xl'>
-              {totalCount.toLocaleString()}
+              {pieData.total_articles_matched.toLocaleString()}
             </span>
           </button>
         </div>
