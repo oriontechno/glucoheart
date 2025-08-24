@@ -20,3 +20,28 @@ export interface OverviewApiResponse {
   data: OverviewCounts;
   error?: string;
 }
+
+// Pie Chart Types
+export interface PieCategoryItem {
+  id: number | null;
+  name: string;
+  slug: string | null;
+  count: number;
+  percentage: number;
+}
+
+export interface ArticlesPieChartResponse {
+  success: boolean;
+  time: string;
+  filters: {
+    status: string;
+    dateField: string;
+    from: string | null;
+    to: string | null;
+    includeUncategorized: boolean;
+    topN: number | null;
+  };
+  total_articles_matched: number;
+  total_assignments: number;
+  categories: PieCategoryItem[];
+}

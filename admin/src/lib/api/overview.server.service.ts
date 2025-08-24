@@ -137,6 +137,42 @@ export class OverviewServerService {
     }
   }
 
+  static async getArticlesPieByCategory(params?: {
+    status?: string;
+    from?: string;
+    to?: string;
+    dateField?: string;
+    includeUncategorized?: string;
+    topN?: string;
+  }) {
+    try {
+      const authConfig = await this.getAuthenticatedRequest();
+
+      // Set default status to 'all' if not provided
+      const requestParams = {
+        status: 'all',
+        ...params
+      };
+
+      const response = await api.get('/articles/metrics/pie/categories', {
+        params: requestParams,
+        ...authConfig
+      });
+
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      console.error('Failed to fetch articles pie chart data:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch articles pie chart data',
+        data: null
+      };
+    }
+  }
+
   static async getAllCounts(params?: {
     period?: string;
     from?: string;
