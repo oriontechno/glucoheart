@@ -105,8 +105,6 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
       fill: grayColors[index] || grayColors[0]
     }));
 
-    console.log('Chart data with gray colors:', data);
-    console.log('Generated colors:', grayColors);
     return data;
   }, [pieData]);
 
@@ -200,7 +198,7 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
                           y={viewBox.cy}
                           className='fill-foreground text-3xl font-bold'
                         >
-                          {totalCount.toLocaleString()}
+                          {pieData.total_articles_matched}
                         </tspan>
                         <tspan
                           x={viewBox.cx}

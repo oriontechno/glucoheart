@@ -19,6 +19,16 @@ import {
 } from '@/components/ui/chart';
 import { TrendingUp } from 'lucide-react';
 
+// Helper function to format date consistently
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    month: 'numeric',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
 // Type definition for the data structure
 interface ArticlesGrowthApiResponse {
   success: boolean;
@@ -122,8 +132,8 @@ export function LineGraph({ data }: LineGraphProps) {
             Showing article publication count{' '}
             {data.data.from && data.data.to ? (
               <>
-                from {new Date(data.data.from).toLocaleDateString()} to{' '}
-                {new Date(data.data.to).toLocaleDateString()}
+                from {formatDate(data.data.from)} to{' '}
+                {formatDate(data.data.to)}
               </>
             ) : (
               'over time'
@@ -199,10 +209,11 @@ export function LineGraph({ data }: LineGraphProps) {
       </CardContent>
       <CardFooter className='mb-5 flex-col items-start gap-2 text-sm'>
         <div className='line-clamp-1 flex gap-2 leading-none font-medium'>
-          Trending up by 5.2% this month <TrendingUp className='h-4 w-4' />
+          The number of articles in this period is {total.toLocaleString()}
         </div>
         <div className='text-muted-foreground line-clamp-1 leading-none'>
-          Article publication trends over time
+          A total of {total.toLocaleString()} articles were published in this
+          period, showing the growth of article publications over time.
         </div>
       </CardFooter>
     </Card>
