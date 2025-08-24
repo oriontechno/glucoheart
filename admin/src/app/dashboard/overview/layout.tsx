@@ -13,15 +13,11 @@ import React from 'react';
 import { OverviewServerService } from '@/lib/api/overview.server.service';
 
 export default async function OverViewLayout({
-  sales,
   pie_stats,
-  bar_stats,
-  area_stats
+  bar_stats
 }: {
-  sales: React.ReactNode;
   pie_stats: React.ReactNode;
   bar_stats: React.ReactNode;
-  area_stats: React.ReactNode;
 }) {
   // Fetch overview data
   const overviewData = await OverviewServerService.getAllCounts({
@@ -140,11 +136,6 @@ export default async function OverViewLayout({
         </div>
         <div className='grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-7'>
           <div className='col-span-4'>{bar_stats}</div>
-          <div className='col-span-4 md:col-span-3'>
-            {/* sales parallel routes */}
-            {sales}
-          </div>
-          <div className='col-span-4'>{area_stats}</div>
           <div className='col-span-4 md:col-span-3'>{pie_stats}</div>
         </div>
       </div>
