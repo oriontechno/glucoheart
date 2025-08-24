@@ -5,8 +5,9 @@ import { OverviewServerService } from '@/lib/api/overview.server.service';
 
 export default async function BarStats() {
   await delay(1000);
-  const articlesGrowthData = await OverviewServerService.getArticlesGrowth();
+  const articlesGrowthResponse =
+    await OverviewServerService.getArticlesGrowth();
 
   // Pass the data to LineGraph component
-  return <LineGraph data={articlesGrowthData} />;
+  return <LineGraph data={articlesGrowthResponse} />;
 }

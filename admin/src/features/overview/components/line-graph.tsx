@@ -20,24 +20,25 @@ import {
 import { TrendingUp } from 'lucide-react';
 
 // Type definition for the data structure
-interface ArticlesGrowthData {
+interface ArticlesGrowthApiResponse {
   success: boolean;
-  data: {
-    success: boolean;
-    time: string;
-    period: string;
-    from: string;
-    to: string;
+  data?: {
+    success?: boolean;
+    time?: string;
+    period?: string;
+    from?: string;
+    to?: string;
     total: number;
-    buckets: Array<{
+    buckets?: Array<{
       start: string;
       count: number;
     }>;
   };
+  error?: string;
 }
 
 interface LineGraphProps {
-  data: ArticlesGrowthData;
+  data: ArticlesGrowthApiResponse;
 }
 
 const chartConfig = {
@@ -53,7 +54,7 @@ const chartConfig = {
 export function LineGraph({ data }: LineGraphProps) {
   // Transform the API data to chart format
   const chartData = React.useMemo(() => {
-    if (!data?.data?.buckets) return [];
+    if (!data?.success || !data?.data?.buckets) return [];
 
     return data.data.buckets.map((bucket) => ({
       date: new Date(bucket.start).toISOString().split('T')[0],
@@ -68,12 +69,46 @@ export function LineGraph({ data }: LineGraphProps) {
     return data?.data?.total || 0;
   }, [data]);
 
+  // Handle error or no data cases
   if (!data?.success || !data?.data?.success) {
     return (
       <Card className='py-4 sm:py-0'>
-        <CardContent className='p-6'>
-          <p className='text-muted-foreground'>Failed to load articles data</p>
+        <CardHeader className='flex flex-col items-stretch border-b !p-0 sm:flex-row'>
+          <div className='flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0'>
+            <CardTitle>Articles Growth - Interactive</CardTitle>
+            <CardDescription>
+              {data?.error || 'Failed to load articles data'}
+            </CardDescription>
+          </div>
+          <div className='flex'>
+            <button
+              data-active={true}
+              className='data-[active=true]:bg-muted/50 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left sm:border-t-0 sm:border-l sm:px-8 sm:py-6'
+            >
+              <span className='text-muted-foreground text-xs'>
+                {chartConfig.articles.label}
+              </span>
+              <span className='text-lg leading-none font-bold sm:text-3xl'>
+                0
+              </span>
+            </button>
+          </div>
+        </CardHeader>
+        <CardContent className='flex h-[250px] items-center justify-center px-2 pt-4 sm:px-6 sm:pt-6'>
+          <div className='text-center'>
+            <p className='text-muted-foreground text-sm'>
+              {data?.error || 'Failed to load articles data'}
+            </p>
+          </div>
         </CardContent>
+        <CardFooter className='flex-col items-start gap-2 text-sm'>
+          <div className='line-clamp-1 flex gap-2 leading-none font-medium'>
+            No data available
+          </div>
+          <div className='text-muted-foreground line-clamp-1 leading-none'>
+            Unable to show article publication trends
+          </div>
+        </CardFooter>
       </Card>
     );
   }
@@ -84,9 +119,15 @@ export function LineGraph({ data }: LineGraphProps) {
         <div className='flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0'>
           <CardTitle>Articles Growth - Interactive</CardTitle>
           <CardDescription>
-            Showing article publication count from{' '}
-            {new Date(data.data.from).toLocaleDateString()} to{' '}
-            {new Date(data.data.to).toLocaleDateString()}
+            Showing article publication count{' '}
+            {data.data.from && data.data.to ? (
+              <>
+                from {new Date(data.data.from).toLocaleDateString()} to{' '}
+                {new Date(data.data.to).toLocaleDateString()}
+              </>
+            ) : (
+              'over time'
+            )}
           </CardDescription>
         </div>
         <div className='flex'>
