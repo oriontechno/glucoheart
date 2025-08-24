@@ -19,10 +19,12 @@ export default async function OverviewPage({
 
   if (!overviewData.success) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <h3 className="text-lg font-semibold text-red-600">Error loading overview data</h3>
-          <p className="text-sm text-muted-foreground">{overviewData.error}</p>
+      <div className='flex h-64 items-center justify-center'>
+        <div className='text-center'>
+          <h3 className='text-lg font-semibold text-red-600'>
+            Error loading overview data
+          </h3>
+          <p className='text-muted-foreground text-sm'>{overviewData.error}</p>
         </div>
       </div>
     );

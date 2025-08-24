@@ -28,14 +28,15 @@ export default async function OverViewLayout({
     period: 'all'
   });
 
-  const { users, articles, chatSessions, discussionRooms } = overviewData.success
-    ? overviewData.data
-    : {
-        users: { total: 0 },
-        articles: { articles: { total: 0 }, categories: { total: 0 } },
-        chatSessions: { total: 0 },
-        discussionRooms: { total: 0 }
-      };
+  const { users, articles, chatSessions, discussionRooms } =
+    overviewData.success
+      ? overviewData.data
+      : {
+          users: { total: 0 },
+          articles: { articles: { total: 0 }, categories: { total: 0 } },
+          chatSessions: { total: 0 },
+          discussionRooms: { total: 0 }
+        };
 
   return (
     <PageContainer>
@@ -87,7 +88,8 @@ export default async function OverViewLayout({
                 Content articles <IconTrendingUp className='size-4' />
               </div>
               <div className='text-muted-foreground'>
-                Articles available in {articles.categories?.total || 0} categories
+                Articles available in {articles.categories?.total || 0}{' '}
+                categories
               </div>
             </CardFooter>
           </Card>

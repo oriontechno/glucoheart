@@ -2,7 +2,11 @@ import { getIronSession } from 'iron-session';
 import { cookies } from 'next/headers';
 import { sessionOptions, SessionData } from '@/lib/session';
 import api from '@/lib/axios';
-import { OverviewApiResponse, CountResponse, ArticlesCountResponse } from '@/types/overview';
+import {
+  OverviewApiResponse,
+  CountResponse,
+  ArticlesCountResponse
+} from '@/types/overview';
 
 export class OverviewServerService {
   private static async getAuthenticatedRequest() {
@@ -140,7 +144,12 @@ export class OverviewServerService {
   }): Promise<OverviewApiResponse> {
     try {
       // Fetch all counts in parallel
-      const [usersCount, articlesCount, chatSessionsCount, discussionRoomsCount] = await Promise.allSettled([
+      const [
+        usersCount,
+        articlesCount,
+        chatSessionsCount,
+        discussionRoomsCount
+      ] = await Promise.allSettled([
         this.getCountUsers(params),
         this.getCountArticles(params),
         this.getCountChatSessions(params),
@@ -150,10 +159,22 @@ export class OverviewServerService {
       return {
         success: true,
         data: {
-          users: usersCount.status === 'fulfilled' ? usersCount.value.data : { total: 0 },
-          articles: articlesCount.status === 'fulfilled' ? articlesCount.value.data : { articles: { total: 0 }, categories: { total: 0 } },
-          chatSessions: chatSessionsCount.status === 'fulfilled' ? chatSessionsCount.value.data : { total: 0 },
-          discussionRooms: discussionRoomsCount.status === 'fulfilled' ? discussionRoomsCount.value.data : { total: 0 }
+          users:
+            usersCount.status === 'fulfilled'
+              ? usersCount.value.data
+              : { total: 0 },
+          articles:
+            articlesCount.status === 'fulfilled'
+              ? articlesCount.value.data
+              : { articles: { total: 0 }, categories: { total: 0 } },
+          chatSessions:
+            chatSessionsCount.status === 'fulfilled'
+              ? chatSessionsCount.value.data
+              : { total: 0 },
+          discussionRooms:
+            discussionRoomsCount.status === 'fulfilled'
+              ? discussionRoomsCount.value.data
+              : { total: 0 }
         }
       };
     } catch (error: any) {
