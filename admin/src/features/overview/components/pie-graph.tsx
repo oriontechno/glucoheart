@@ -218,7 +218,7 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
           </PieChart>
         </ChartContainer>
       </CardContent>
-      <CardFooter className='flex-col items-start gap-2 text-sm'>
+      <CardFooter className='mb-5 flex-col items-start gap-2 text-sm'>
         {topCategory && (
           <div className='line-clamp-1 flex gap-2 leading-none font-medium'>
             {topCategory.name} leads with {topPercentage.toFixed(1)}%{' '}

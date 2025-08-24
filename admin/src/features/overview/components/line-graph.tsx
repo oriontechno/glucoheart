@@ -197,7 +197,7 @@ export function LineGraph({ data }: LineGraphProps) {
           </LineChart>
         </ChartContainer>
       </CardContent>
-      <CardFooter className='flex-col items-start gap-2 text-sm'>
+      <CardFooter className='mb-5 flex-col items-start gap-2 text-sm'>
         <div className='line-clamp-1 flex gap-2 leading-none font-medium'>
           Trending up by 5.2% this month <TrendingUp className='h-4 w-4' />
         </div>
