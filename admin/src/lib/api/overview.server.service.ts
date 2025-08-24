@@ -26,6 +26,38 @@ export class OverviewServerService {
     };
   }
 
+  static async getArticlesGrowth(
+    params: {
+      period?: 'month';
+      from?: string;
+      to?: string;
+    } = {
+      from: new Date(new Date().getFullYear(), 0, 1).toISOString(),
+      to: new Date().toISOString()
+    }
+  ) {
+    try {
+      const authConfig = await this.getAuthenticatedRequest();
+
+      const response = await api.get('/articles/metrics/growth', {
+        params,
+        ...authConfig
+      });
+
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      console.error('Failed to fetch users growth:', error);
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch users growth',
+        data: { total: 0 }
+      };
+    }
+  }
+
   static async getCountUsers(params?: {
     period?: string;
     from?: string;

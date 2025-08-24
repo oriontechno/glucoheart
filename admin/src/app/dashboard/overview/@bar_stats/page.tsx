@@ -1,8 +1,12 @@
+// BarStats.tsx (Server Component)
 import { delay } from '@/constants/mock-api';
-import { BarGraph } from '@/features/overview/components/bar-graph';
+import { LineGraph } from '@/features/overview/components/line-graph';
+import { OverviewServerService } from '@/lib/api/overview.server.service';
 
 export default async function BarStats() {
-  await await delay(1000);
+  await delay(1000);
+  const articlesGrowthData = await OverviewServerService.getArticlesGrowth();
 
-  return <BarGraph />;
+  // Pass the data to LineGraph component
+  return <LineGraph data={articlesGrowthData} />;
 }

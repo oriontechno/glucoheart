@@ -53,14 +53,29 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
   // Check if we have valid data
   if (!pieData || !pieData.categories || pieData.categories.length === 0) {
     return (
-      <Card className='@container/card'>
-        <CardHeader>
-          <CardTitle>Articles by Category</CardTitle>
-          <CardDescription>
-            Distribution of published articles across categories
-          </CardDescription>
+      <Card className='py-4 sm:py-0'>
+        <CardHeader className='flex flex-col items-stretch border-b !p-0 sm:flex-row'>
+          <div className='flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0'>
+            <CardTitle>Articles by Category</CardTitle>
+            <CardDescription>
+              Distribution of published articles across categories
+            </CardDescription>
+          </div>
+          <div className='flex'>
+            <button
+              data-active={true}
+              className='data-[active=true]:bg-muted/50 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left sm:border-t-0 sm:border-l sm:px-8 sm:py-6'
+            >
+              <span className='text-muted-foreground text-xs'>
+                Total Articles
+              </span>
+              <span className='text-lg leading-none font-bold sm:text-3xl'>
+                {pieData?.total_articles_matched?.toLocaleString() || '0'}
+              </span>
+            </button>
+          </div>
         </CardHeader>
-        <CardContent className='flex h-[250px] items-center justify-center'>
+        <CardContent className='flex h-[250px] items-center justify-center px-2 pt-4 sm:px-6 sm:pt-6'>
           <div className='text-center'>
             <p className='text-muted-foreground text-sm'>
               No article data available
@@ -126,20 +141,35 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
     : 0;
 
   return (
-    <Card className='@container/card'>
-      <CardHeader>
-        <CardTitle>Articles by Category</CardTitle>
-        <CardDescription>
-          <span className='hidden @[540px]/card:block'>
-            Distribution of published articles across categories
-          </span>
-          <span className='@[540px]/card:hidden'>Article distribution</span>
-        </CardDescription>
+    <Card className='py-4 sm:py-0'>
+      <CardHeader className='flex flex-col items-stretch border-b !p-0 sm:flex-row'>
+        <div className='flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0'>
+          <CardTitle>Articles by Category</CardTitle>
+          <CardDescription>
+            <span className='hidden @[540px]/card:block'>
+              Distribution of published articles across categories
+            </span>
+            <span className='@[540px]/card:hidden'>Article distribution</span>
+          </CardDescription>
+        </div>
+        <div className='flex'>
+          <button
+            data-active={true}
+            className='data-[active=true]:bg-muted/50 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left sm:border-t-0 sm:border-l sm:px-8 sm:py-6'
+          >
+            <span className='text-muted-foreground text-xs'>
+              Total Articles
+            </span>
+            <span className='text-lg leading-none font-bold sm:text-3xl'>
+              {totalCount.toLocaleString()}
+            </span>
+          </button>
+        </div>
       </CardHeader>
       <CardContent className='px-2 pt-4 sm:px-6 sm:pt-6'>
         <ChartContainer
           config={chartConfig}
-          className='mx-auto aspect-square h-[250px]'
+          className='mx-auto aspect-auto h-[250px] w-full'
         >
           <PieChart>
             <ChartTooltip
@@ -150,8 +180,8 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
               data={chartData}
               dataKey='count'
               nameKey='name'
-              innerRadius={70}
-              outerRadius={120}
+              innerRadius={60}
+              outerRadius={100}
               strokeWidth={1}
               stroke='rgba(255, 255, 255, 0.1)'
             >
@@ -188,13 +218,16 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
           </PieChart>
         </ChartContainer>
       </CardContent>
-      <CardFooter className='flex-col gap-2 text-sm'>
+      <CardFooter className='flex-col items-start gap-2 text-sm'>
         {topCategory && (
-          <div className='flex items-center gap-2 leading-none font-medium'>
+          <div className='line-clamp-1 flex gap-2 leading-none font-medium'>
             {topCategory.name} leads with {topPercentage.toFixed(1)}%{' '}
             <IconTrendingUp className='h-4 w-4' />
           </div>
         )}
+        <div className='text-muted-foreground line-clamp-1 leading-none'>
+          Distribution across categories
+        </div>
       </CardFooter>
     </Card>
   );
@@ -204,12 +237,27 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
 export const PieGraph = dynamic(() => Promise.resolve(PieGraphComponent), {
   ssr: false,
   loading: () => (
-    <Card className='@container/card'>
-      <CardHeader>
-        <CardTitle>Articles by Category</CardTitle>
-        <CardDescription>Loading chart...</CardDescription>
+    <Card className='py-4 sm:py-0'>
+      <CardHeader className='flex flex-col items-stretch border-b !p-0 sm:flex-row'>
+        <div className='flex flex-1 flex-col justify-center gap-1 px-6 pb-3 sm:pb-0'>
+          <CardTitle>Articles by Category</CardTitle>
+          <CardDescription>Loading chart...</CardDescription>
+        </div>
+        <div className='flex'>
+          <button
+            data-active={true}
+            className='data-[active=true]:bg-muted/50 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left sm:border-t-0 sm:border-l sm:px-8 sm:py-6'
+          >
+            <span className='text-muted-foreground text-xs'>
+              Total Articles
+            </span>
+            <span className='text-lg leading-none font-bold sm:text-3xl'>
+              ...
+            </span>
+          </button>
+        </div>
       </CardHeader>
-      <CardContent className='flex h-[250px] items-center justify-center'>
+      <CardContent className='flex h-[250px] items-center justify-center px-2 pt-4 sm:px-6 sm:pt-6'>
         <div className='text-center'>
           <p className='text-muted-foreground text-sm'>Loading pie chart...</p>
         </div>
