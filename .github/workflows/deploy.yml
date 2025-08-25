@@ -49,6 +49,22 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
 
+      - name: Deploy Admin via rsync
+        run: |
+          rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./admin/.next ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/.next
+          rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./admin/public ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/public
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./admin/package.json ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/
+
+      - name: Deploy Backend via rsync
+        run: |
+          rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./backend/dist ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/dist
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./backend/package.json ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/
+
       - name: Build & Restart on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -61,11 +77,7 @@ jobs:
             pnpm -v
 
             cd /var/www/glucoheart/admin
-            pnpm install --frozen-lockfile
-            pnpm build
             pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin --interpreter $HOME/.nvm/versions/node/v22.13.0/bin/node
 
             cd /var/www/glucoheart/backend
-            pnpm install --frozen-lockfile
-            pnpm build
             pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend --interpreter $HOME/.nvm/versions/node/v22.13.0/bin/node
