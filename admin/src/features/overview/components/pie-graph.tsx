@@ -50,7 +50,51 @@ interface PieGraphProps {
 }
 
 function PieGraphComponent({ pieData }: PieGraphProps) {
-  // Check if we have valid data
+  // All hooks must be called before any conditional logic
+  const chartData = React.useMemo(() => {
+    // Return empty array if no valid data
+    if (!pieData || !pieData.categories || pieData.categories.length === 0) {
+      return [];
+    }
+
+    // Generate gray colors based on number of categories
+    const grayColors = generateGrayColors(pieData.categories.length);
+
+    const data = pieData.categories.map((category, index) => ({
+      name: category.name,
+      count: category.count,
+      percentage: category.percentage,
+      fill: grayColors[index] || grayColors[0]
+    }));
+
+    return data;
+  }, [pieData]);
+
+  const chartConfig = React.useMemo(() => {
+    const config: ChartConfig = {
+      count: {
+        label: 'Articles'
+      }
+    };
+
+    // Only add chart items if we have valid chart data
+    if (chartData.length > 0) {
+      chartData.forEach((item) => {
+        config[item.name.toLowerCase().replace(/\s+/g, '_')] = {
+          label: item.name,
+          color: item.fill
+        };
+      });
+    }
+
+    return config;
+  }, [chartData]);
+
+  const totalCount = React.useMemo(() => {
+    return chartData.reduce((acc, curr) => acc + curr.count, 0);
+  }, [chartData]);
+
+  // Check if we have valid data after hooks are called
   if (!pieData || !pieData.categories || pieData.categories.length === 0) {
     return (
       <Card className='py-4 sm:py-0'>
@@ -93,41 +137,6 @@ function PieGraphComponent({ pieData }: PieGraphProps) {
       </Card>
     );
   }
-
-  const chartData = React.useMemo(() => {
-    // Generate gray colors based on number of categories
-    const grayColors = generateGrayColors(pieData.categories.length);
-
-    const data = pieData.categories.map((category, index) => ({
-      name: category.name,
-      count: category.count,
-      percentage: category.percentage,
-      fill: grayColors[index] || grayColors[0]
-    }));
-
-    return data;
-  }, [pieData]);
-
-  const chartConfig = React.useMemo(() => {
-    const config: ChartConfig = {
-      count: {
-        label: 'Articles'
-      }
-    };
-
-    chartData.forEach((item) => {
-      config[item.name.toLowerCase().replace(/\s+/g, '_')] = {
-        label: item.name,
-        color: item.fill
-      };
-    });
-
-    return config;
-  }, [chartData]);
-
-  const totalCount = React.useMemo(() => {
-    return chartData.reduce((acc, curr) => acc + curr.count, 0);
-  }, [chartData]);
 
   const topCategory = chartData[0];
   const topPercentage: number = topCategory

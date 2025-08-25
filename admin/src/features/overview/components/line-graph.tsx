@@ -132,8 +132,7 @@ export function LineGraph({ data }: LineGraphProps) {
             Showing article publication count{' '}
             {data.data.from && data.data.to ? (
               <>
-                from {formatDate(data.data.from)} to{' '}
-                {formatDate(data.data.to)}
+                from {formatDate(data.data.from)} to {formatDate(data.data.to)}
               </>
             ) : (
               'over time'

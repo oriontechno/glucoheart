@@ -1,5 +1,7 @@
 import { OverviewServerService } from '@/lib/api/overview.server.service';
 
+export const dynamic = 'force-dynamic';
+
 export default async function OverviewPage({
   searchParams
 }: {
