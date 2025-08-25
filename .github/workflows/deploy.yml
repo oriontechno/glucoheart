@@ -3,69 +3,64 @@ name: Deploy Glucoheart
 on:
   push:
     branches:
-      - test # ganti sesuai branch yang mau auto deploy
+      - test
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: "22"
 
-      - name: Install pnpm
-        run: npm install -g pnpm
-
-      - name: Add VPS to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Test SSH connection
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_KEY }}
-          script: |
-            echo "✅ SSH connection works!"
-            hostname
-            whoami
+          version: "8"
 
       - name: Build Backend
         working-directory: ./backend
         run: |
           pnpm install --frozen-lockfile
-          pnpm run build
+          pnpm build
 
       - name: Build Admin
         working-directory: ./admin
         run: |
           pnpm install --frozen-lockfile
-          pnpm run build
+          pnpm build
 
-      - name: Build & Restart on VPS
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
           script: |
-            export PATH=$HOME/.nvm/versions/node/v22.13.0/bin:$PATH
-            node -v
-            pnpm -v
+            cd /var/www/glucoheart
 
-            cd /var/www/glucoheart/admin
+            # Pull latest code
+            git pull origin test
+
+            # Deploy Admin
+            cd admin
             pnpm install --frozen-lockfile
             pnpm build
-            pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin --interpreter $HOME/.nvm/versions/node/v22.13.0/bin/node
+            pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin
 
-            cd /var/www/glucoheart/backend
+            # Deploy Backend  
+            cd ../backend
             pnpm install --frozen-lockfile
             pnpm build
-            pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend --interpreter $HOME/.nvm/versions/node/v22.13.0/bin/node
+            pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend
+
+            # Save PM2
+            pm2 save
+
+            echo "✅ Deployment completed!"
