@@ -13,36 +13,49 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # ---- Build & Test ----
+      # ---- Setup Node & pnpm ----
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: "22"
 
-      # ---- Enable Corepack (biar pnpm kebaca) ----
       - name: Enable Corepack
         run: corepack enable
 
-      # ---- Setup pnpm ----
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
           version: 10
 
-      - name: Install & Build Admin (Next.js)
+      # ---- Build Admin (Next.js) ----
+      - name: Build Admin
         working-directory: ./admin
         run: |
-          pnpm install
+          pnpm install --frozen-lockfile
           pnpm run build
 
-      - name: Install & Build Backend (NestJS)
+      # ---- Build Backend (NestJS) ----
+      - name: Build Backend
         working-directory: ./backend
         run: |
-          pnpm install
+          pnpm install --frozen-lockfile
           pnpm run build
 
-      # ---- Deploy to VPS ----
-      - name: Deploy via SSH
+      # ---- Deploy Admin ----
+      - name: Deploy Admin via rsync
+        run: |
+          rsync -avz --delete ./admin/.next root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/.next
+          rsync -avz --delete ./admin/public root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/public
+          rsync -avz ./admin/package.json root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/
+
+      # ---- Deploy Backend ----
+      - name: Deploy Backend via rsync
+        run: |
+          rsync -avz --delete ./backend/dist root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/dist
+          rsync -avz ./backend/package.json root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/
+
+      # ---- Restart PM2 ----
+      - name: Restart services on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -50,13 +63,8 @@ jobs:
           key: ${{ secrets.VPS_KEY }}
           script: |
             export PATH=$PATH:/root/.nvm/versions/node/v22.13.0/bin
-            cd /var/www/glucoheart
-            git pull origin test
-            cd admin
-            pnpm install --production
-            pnpm run build
-            pm2 restart glucoheart-admin || pm2 start pnpm --name glucoheart-admin -- start
-            cd ../backend
-            pnpm install --production
-            pnpm run build
-            pm2 restart glucoheart-backend || pm2 start pnpm --name glucoheart-backend -- start
+            cd /var/www/glucoheart/admin
+            pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin
+
+            cd /var/www/glucoheart/backend
+            pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend
