@@ -62,9 +62,9 @@ jobs:
             export PATH=$HOME/.nvm/versions/node/v22.13.0/bin:$PATH
 
             cd /var/www/glucoheart/admin
-            pnpm install --prod
+            HUSKY=0 pnpm install --frozen-lockfile --prod
             pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin --interpreter $(which node)
 
             cd /var/www/glucoheart/backend
-            pnpm install --prod
+            HUSKY=0 pnpm install --frozen-lockfile --prod
             pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend --interpreter $(which node)
