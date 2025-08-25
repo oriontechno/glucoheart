@@ -21,6 +21,22 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm
 
+      - name: Add VPS to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Test SSH connection
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          script: |
+            echo "✅ SSH connection works!"
+            hostname
+            whoami
+
       - name: Build Backend
         working-directory: ./backend
         run: |
@@ -32,11 +48,6 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm run build
-
-      - name: Add VPS to known_hosts
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy Admin via rsync
         run: |
