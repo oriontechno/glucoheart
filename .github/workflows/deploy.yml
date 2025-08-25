@@ -19,8 +19,8 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install & Build Frontend (Next.js)
-        working-directory: ./frontend
+      - name: Install & Build Admin (Next.js)
+        working-directory: ./admin
         run: |
           pnpm install
           pnpm run build
