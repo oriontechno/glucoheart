@@ -48,26 +48,43 @@ jobs:
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-            # Verify tools
-            node -v
-            pnpm -v
-
             cd /var/www/glucoheart
 
-            # Pull latest code
+            # Pull latest code (source only)
             git pull origin test
 
-            # Deploy Admin
+            # Install production dependencies only
             cd admin
-            pnpm install --no-frozen-lockfile
-            pnpm build
-            pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin
+            pnpm install --prod --no-frozen-lockfile
 
-            # Deploy Backend  
             cd ../backend
-            pnpm install --no-frozen-lockfile
-            pnpm build
-            pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend
+            pnpm install --prod --no-frozen-lockfile
+
+      - name: Sync Built Files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          source: "backend/dist,admin/.next"
+          target: "/var/www/glucoheart/"
+          overwrite: true
+
+      - name: Restart Services
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          script: |
+            # Setup environment
+            export PATH="$HOME/.nvm/versions/node/v22/bin:$PATH"
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+            # Restart services
+            pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin --cwd /var/www/glucoheart/admin
+            pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend --cwd /var/www/glucoheart/backend
 
             # Save PM2
             pm2 save
