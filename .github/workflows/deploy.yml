@@ -18,6 +18,17 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "22"
+          cache: "pnpm"
+
+      # ---- Enable Corepack (biar pnpm kebaca) ----
+      - name: Enable Corepack
+        run: corepack enable
+
+      # ---- Setup pnpm ----
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
 
       - name: Install & Build Admin (Next.js)
         working-directory: ./admin
