@@ -27,13 +27,13 @@ jobs:
       - name: Build Backend
         working-directory: ./backend
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --no-frozen-lockfile
           pnpm build
 
       - name: Build Admin
         working-directory: ./admin
         run: |
-          pnpm install --frozen-lockfile
+          pnpm install --no-frozen-lockfile
           pnpm build
 
       - name: Deploy to VPS
@@ -43,6 +43,15 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
           script: |
+            # Setup environment
+            export PATH="$HOME/.nvm/versions/node/v22/bin:$PATH"
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+            # Verify tools
+            node -v
+            pnpm -v
+
             cd /var/www/glucoheart
 
             # Pull latest code
@@ -50,13 +59,13 @@ jobs:
 
             # Deploy Admin
             cd admin
-            pnpm install --frozen-lockfile
+            pnpm install --no-frozen-lockfile
             pnpm build
             pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin
 
             # Deploy Backend  
             cd ../backend
-            pnpm install --frozen-lockfile
+            pnpm install --no-frozen-lockfile
             pnpm build
             pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend
 
