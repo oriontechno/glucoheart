@@ -49,7 +49,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
           script: |
-            cd /var/www/myapp
+            cd /var/www/glucoheart
             git pull origin test
             cd frontend
             pnpm install --production
