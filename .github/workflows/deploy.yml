@@ -49,16 +49,28 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
 
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
       - name: Deploy Admin via rsync
         run: |
-          rsync -avz --delete ./admin/.next root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/.next
-          rsync -avz --delete ./admin/public root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/public
-          rsync -avz ./admin/package.json root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/
+          rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./admin/.next ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/.next
+          rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./admin/public ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/public
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./admin/package.json ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/
 
       - name: Deploy Backend via rsync
         run: |
-          rsync -avz --delete ./backend/dist root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/dist
-          rsync -avz ./backend/package.json root@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/
+          rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./backend/dist ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/dist
+          rsync -avz -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
+            ./backend/package.json ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/
 
       - name: Restart services on VPS
         uses: appleboy/ssh-action@v1.0.3
