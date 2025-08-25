@@ -38,8 +38,9 @@ export async function middleware(request: NextRequest) {
             }
           });
 
+          const sessionData = await sessionResponse.json();
+
           if (sessionResponse.ok) {
-            const sessionData = await sessionResponse.json();
             isLoggedIn = sessionData.isLoggedIn === true;
           }
         } catch (error) {
