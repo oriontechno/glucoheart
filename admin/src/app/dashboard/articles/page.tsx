@@ -12,7 +12,7 @@ import { SearchParams } from 'nuqs/server';
 import { Suspense } from 'react';
 
 export const metadata = {
-  title: 'Dashboard: Articles'
+  title: 'Dashboard: Education Articles'
 };
 
 type pageProps = {
@@ -32,7 +32,7 @@ export default async function Page(props: pageProps) {
       <div className='flex flex-1 flex-col space-y-4'>
         <div className='flex items-start justify-between'>
           <Heading
-            title='Articles'
+            title='Education Articles'
             description='Manage articles (Server side table functionalities.)'
           />
           <Link

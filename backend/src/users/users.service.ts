@@ -1,0 +1,696 @@
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { users } from '../db/schema';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  sql,
+  ne,
+  lte,
+  gte,
+} from 'drizzle-orm';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import * as bcrypt from 'bcrypt';
+import { ROLES } from '../db/schema/roles';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { AdminResetPasswordDto } from './dto/admin-reset-password.dto';
+import { validatePasswordStrength } from './password.policy';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { promises as fs } from 'fs';
+import { join } from 'path';
+
+type Period = 'day' | 'week' | 'month' | 'year' | 'all';
+
+@Injectable()
+export class UsersService {
+  constructor(
+    @Inject('DATABASE_CONNECTION')
+    private db: NodePgDatabase<typeof import('../db/schema')>,
+    private readonly events: EventEmitter2,
+  ) {}
+
+  private async getUserPasswordHash(userId: number) {
+    const [u] = await this.db
+      .select({
+        id: users.id,
+        passwordHash: users.password, // <- alias dari kolom 'password'
+        updatedAt: users.updatedAt, // <- kolom ada di schema
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+
+    if (!u) throw new NotFoundException('User not found');
+    if (!u.passwordHash) {
+      throw new BadRequestException('Password is not set for this user');
+    }
+    return u.passwordHash as string;
+  }
+
+  // --- Helpers aman ---
+
+  private parseRoles(roles?: string): string[] | null {
+    if (!roles) return null;
+    const list = roles
+      .split('.')
+      .map((r) => r.trim())
+      .filter(Boolean)
+      .map((r) => r.toUpperCase());
+    return list.length ? list : null;
+  }
+
+  // private parseRoles(raw?: string | null): string[] {
+  //   if (!raw) return []; // ← kembalikan array kosong, bukan null
+  //   return Array.from(
+  //     new Set(
+  //       raw
+  //         .split('.')
+  //         .map((r) => r.trim().toUpperCase())
+  //         .filter(Boolean),
+  //     ),
+  //   );
+  // }
+
+  private buildWhere(params: { roles?: string; search?: string }) {
+    const conds: any[] = [];
+
+    // roles filter: enum users.role
+    const parsed = this.parseRoles(params.roles);
+    if (parsed) conds.push(inArray(users.role, parsed as any));
+
+    // search by email / firstName / lastName
+    if (params.search) {
+      const q = `%${params.search}%`;
+      conds.push(
+        sql`(
+          ${users.email} ILIKE ${q}
+          OR ${users.firstName} ILIKE ${q}
+          OR ${users.lastName} ILIKE ${q}
+        )`,
+      );
+    }
+
+    return conds.length ? and(...conds) : sql`true`;
+  }
+
+  private parseSort(sort?: string) {
+    // dukung kunci: id, first_name, last_name, email, created_at, role
+    const allowed: Record<string, any> = {
+      id: users.id,
+      first_name: users.firstName,
+      last_name: users.lastName,
+      firstName: users.firstName, // kompatibel
+      lastName: users.lastName, // kompatibel
+      email: users.email,
+      created_at: users.createdAt,
+      role: users.role,
+    };
+
+    const def = users.createdAt;
+
+    if (!sort) return [desc(def)];
+    try {
+      const arr = JSON.parse(sort);
+      if (!Array.isArray(arr) || !arr.length) return [desc(def)];
+      const orderBys: any[] = [];
+      for (const item of arr) {
+        const col = allowed[item?.id as string];
+        if (!col) continue;
+        orderBys.push(item?.desc ? desc(col) : asc(col));
+      }
+      return orderBys.length ? orderBys : [desc(def)];
+    } catch {
+      return [desc(def)];
+    }
+  }
+
+  // Utility: ubah file path -> public URL & storageKey
+  private toPublicFromFile(file: Express.Multer.File) {
+    // file.path: /.../uploads/avatar/xxx.ext
+    // public url: /uploads/avatar/xxx.ext
+    const rel = file.path.replace(/\\/g, '/'); // normalize
+    const idx = rel.lastIndexOf('/uploads/');
+    const publicUrl =
+      idx >= 0 ? rel.slice(idx) : '/uploads/avatar/' + rel.split('/').pop();
+    return { url: publicUrl, storageKey: publicUrl.replace(/^\//, '') };
+    // storageKey akan relatif dari project root: 'uploads/avatar/xxx.ext'
+  }
+
+  private async getUserRow(userId: number) {
+    const [u] = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        role: users.role,
+        profilePicture: users.profilePicture,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    return u;
+  }
+
+  private async safeDeleteAvatarIfUnused(
+    oldUrl: string | null | undefined,
+    excludeUserId: number,
+  ) {
+    if (!oldUrl) return;
+    if (!oldUrl.startsWith('/uploads/avatar/')) return; // hanya hapus file lokal avatar
+
+    // cek apakah ada user lain yang masih memakai URL ini
+    const [{ c }] = await this.db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(users)
+      .where(
+        and(eq(users.profilePicture, oldUrl), ne(users.id, excludeUserId)),
+      );
+
+    if (c > 0) return; // masih dipakai user lain
+
+    const abs = join(process.cwd(), oldUrl.replace(/^\//, ''));
+    await fs.unlink(abs).catch(() => {});
+  }
+
+  private parsePeriod(raw?: string): Period {
+    const v = String(raw ?? 'all').toLowerCase();
+    if (
+      v === 'day' ||
+      v === 'week' ||
+      v === 'month' ||
+      v === 'year' ||
+      v === 'all'
+    )
+      return v;
+    throw new BadRequestException(
+      'Invalid period. Use day|week|month|year|all',
+    );
+  }
+
+  private computeDefaultRange(period: Period): { from?: Date; to?: Date } {
+    if (period === 'all') return {};
+    const to = new Date();
+    const from = new Date(to);
+    switch (period) {
+      case 'day':
+        from.setDate(to.getDate() - 1); // 1 hari terakhir
+        break;
+      case 'week':
+        from.setDate(to.getDate() - 7); // 1 minggu terakhir
+        break;
+      case 'month':
+        from.setMonth(to.getMonth() - 1); // 1 bulan terakhir
+        break;
+      case 'year':
+        from.setFullYear(to.getFullYear() - 1); // 1 tahun terakhir
+        break;
+    }
+    return { from, to };
+  }
+
+  private normalizeRange(period: Period, from?: string, to?: string) {
+    const def = this.computeDefaultRange(period);
+    const f = from ? new Date(from) : def.from;
+    const t = to ? new Date(to) : def.to;
+    if (f && isNaN(+f)) throw new BadRequestException('Invalid from date');
+    if (t && isNaN(+t)) throw new BadRequestException('Invalid to date');
+    return { from: f, to: t };
+  }
+
+  // ================================== End Helper ============================================= //
+
+  /**
+   * Query:
+   * - period: 'day' | 'week' | 'month' | 'year' | 'all' (default: 'all')
+   * - from, to: ISO date (opsional; jika period ≠ 'all' & tak diisi -> default)
+   * - roles: "user.admin" (opsional)
+   */
+  async countUsers(params: {
+    period?: string; // 'day' | 'week' | 'month' | 'year' | 'all'
+    from?: string; // ISO date (opsional)
+    to?: string; // ISO date (opsional)
+    roles?: string; // "user.admin.support" -> pakai helper parseRoles
+  }) {
+    // --- period ---
+    const period = this.parsePeriod(params.period);
+    const { from, to } = this.normalizeRange(period, params.from, params.to);
+    if (from && isNaN(+from))
+      throw new BadRequestException('Invalid from date');
+    if (to && isNaN(+to)) throw new BadRequestException('Invalid to date');
+
+    // --- roles (pakai helper) ---
+    const roleList = this.parseRoles(params.roles); // <- string[] | null
+
+    // --- WHERE ---
+    const whereParts: any[] = [];
+    if (from) whereParts.push(gte(users.createdAt as any, from));
+    if (to) whereParts.push(lte(users.createdAt as any, to));
+    if (roleList?.length) whereParts.push(inArray(users.role as any, roleList));
+    const where = whereParts.length ? and(...whereParts) : undefined;
+
+    // --- ALL (total saja; jika from/to diisi -> total dalam range tsb) ---
+    if (period === 'all') {
+      const [{ total }] = await this.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(users as any)
+        .where(where);
+      return {
+        success: true,
+        time: new Date().toISOString(),
+        period,
+        from: from?.toISOString() ?? null,
+        to: to?.toISOString() ?? null,
+        total,
+        buckets: [],
+      };
+    }
+
+    // --- Bucketing pakai date_trunc tanpa timezone ---
+    const bucketExpr = sql<Date>`date_trunc(${sql.raw(`'${period}'`)}, ${users.createdAt})`;
+
+    const rows = await this.db
+      .select({
+        bucketStart: bucketExpr,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(users as any)
+      .where(where)
+      .groupBy(bucketExpr)
+      .orderBy(asc(bucketExpr));
+
+    const total = rows.reduce((acc, r) => acc + (r.count ?? 0), 0);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      period,
+      from: from?.toISOString() ?? null,
+      to: to?.toISOString() ?? null,
+      total,
+      buckets: rows.map((r) => ({
+        start:
+          r.bucketStart instanceof Date
+            ? r.bucketStart.toISOString()
+            : String(r.bucketStart),
+        count: r.count,
+      })),
+    };
+  }
+
+  // ========== User ganti avatar miliknya ==========
+  async updateMyAvatar(acting: { id: number }, file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No file uploaded');
+
+    const me = await this.getUserRow(acting.id);
+    if (!me) throw new NotFoundException('User not found');
+
+    const { url, storageKey } = this.toPublicFromFile(file);
+
+    await this.db
+      .update(users)
+      .set({ profilePicture: url, updatedAt: new Date() })
+      .where(eq(users.id, acting.id));
+
+    // hapus file lama kalau lokal & tidak dipakai user lain
+    await this.safeDeleteAvatarIfUnused(me.profilePicture, acting.id);
+
+    return {
+      message: 'Avatar updated successfully',
+      id: acting.id,
+      profilePicture: url,
+    };
+  }
+
+  async removeMyAvatar(acting: { id: number }) {
+    const me = await this.getUserRow(acting.id);
+    if (!me) throw new NotFoundException('User not found');
+
+    await this.db
+      .update(users)
+      .set({ profilePicture: null as any, updatedAt: new Date() })
+      .where(eq(users.id, acting.id));
+
+    await this.safeDeleteAvatarIfUnused(me.profilePicture, acting.id);
+
+    return { message: 'Avatar removed successfully' };
+  }
+
+  // ========== Admin set/hapus avatar user lain ==========
+  async adminSetAvatar(
+    acting: { id: number; role?: string },
+    userId: number,
+    file: Express.Multer.File,
+  ) {
+    if (acting.role !== 'ADMIN' && acting.role !== 'SUPPORT') {
+      throw new ForbiddenException('Admin/Support only');
+    }
+    if (!file) throw new BadRequestException('No file uploaded');
+
+    const target = await this.getUserRow(userId);
+    if (!target) throw new NotFoundException('Target user not found');
+
+    const { url } = this.toPublicFromFile(file);
+
+    await this.db
+      .update(users)
+      .set({ profilePicture: url, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await this.safeDeleteAvatarIfUnused(target.profilePicture, userId);
+
+    return {
+      message: 'Avatar updated successfully',
+      userId,
+      profilePicture: url,
+    };
+  }
+
+  async adminRemoveAvatar(
+    acting: { id: number; role?: string },
+    userId: number,
+  ) {
+    if (acting.role !== 'ADMIN' && acting.role !== 'SUPPORT') {
+      throw new ForbiddenException('Admin/Support only');
+    }
+
+    const target = await this.getUserRow(userId);
+    if (!target) throw new NotFoundException('Target user not found');
+
+    await this.db
+      .update(users)
+      .set({ profilePicture: null as any, updatedAt: new Date() })
+      .where(eq(users.id, userId));
+
+    await this.safeDeleteAvatarIfUnused(target.profilePicture, userId);
+
+    return { message: 'Avatar removed successfully', userId };
+  }
+
+  // === GET /users/all ===
+  async findAllSimple(params: { roles?: string; search?: string }) {
+    const where = this.buildWhere(params);
+
+    const rows = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        createdAt: users.createdAt,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profilePicture: users.profilePicture,
+      })
+      .from(users)
+      .where(where)
+      .orderBy(desc(users.createdAt));
+
+    return rows.map((r) => ({
+      id: r.id,
+      firstName: r.firstName ?? null,
+      lastName: r.lastName ?? null,
+      email: r.email ?? null,
+      role: r.role ?? null,
+      profilePicture: r.profilePicture ?? null,
+      created_at: r.createdAt ?? null,
+    }));
+  }
+
+  // === GET /users (paginate + sort) ===
+  async findPaginated(params: {
+    page?: number;
+    limit?: number;
+    roles?: string;
+    search?: string;
+    sort?: string;
+  }) {
+    const page = Math.max(Number(params.page ?? 1), 1);
+    const limit = Math.min(Math.max(Number(params.limit ?? 10), 1), 100);
+    const offset = (page - 1) * limit;
+
+    const where = this.buildWhere(params);
+    const orderBys = this.parseSort(params.sort);
+
+    const totalRows = await this.db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(users)
+      .where(where);
+
+    const rows = await this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        role: users.role,
+        createdAt: users.createdAt,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profilePicture: users.profilePicture,
+      })
+      .from(users)
+      .where(where)
+      .orderBy(...orderBys)
+      .limit(limit)
+      .offset(offset);
+
+    return {
+      success: true,
+      time: new Date().toISOString(),
+      message: 'Sample user data for testing and learning purposes',
+      total_users: totalRows[0]?.c ?? 0,
+      offset,
+      limit,
+      users: rows.map((r) => ({
+        id: r.id,
+        firstName: r.firstName ?? null,
+        lastName: r.lastName ?? null,
+        email: r.email ?? null,
+        role: r.role ?? null,
+        profilePicture: r.profilePicture ?? null,
+        created_at: r.createdAt ?? null,
+      })),
+    };
+  }
+
+  async findAll(role?: string) {
+    if (role) {
+      return this.db.query.users.findMany({
+        where: eq(users.role, role),
+      });
+    }
+    return this.db.query.users.findMany();
+  }
+
+  async findOne(id: number) {
+    const user = await this.db.query.users.findFirst({
+      where: eq(users.id, id),
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    return user;
+  }
+
+  async changePassword(
+    actingUser: { id: number },
+    dto: { currentPassword: string; newPassword: string },
+  ) {
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException(
+        'Password baru tidak boleh sama dengan password lama',
+      );
+    }
+
+    const issues = validatePasswordStrength(dto.newPassword);
+    if (issues.length) {
+      throw new BadRequestException('Password lemah: ' + issues.join(', '));
+    }
+
+    // ambil hash sekarang dari DB
+    const currentHash = await this.getUserPasswordHash(actingUser.id);
+
+    // ✅ urutan benar: compare(plain, hash)
+    const ok = await bcrypt.compare(dto.currentPassword, currentHash);
+    if (!ok) {
+      throw new ForbiddenException('Password saat ini salah');
+    }
+
+    const newHash = await bcrypt.hash(dto.newPassword, 10);
+
+    try {
+      await this.db
+        .update(users)
+        .set({
+          password: newHash, // ✅ kolom sesuai schema
+          updatedAt: new Date(), // ✅ gunakan updatedAt
+        })
+        .where(eq(users.id, actingUser.id));
+
+      // Emit event downstream kalau kamu memang punya event emitter ini
+      this.events?.emit?.('user.password.changed', { userId: actingUser.id });
+
+      return { message: 'Password changed successfully' };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to change password');
+    }
+  }
+
+  async adminResetPassword(
+    actingUser: { id: number; role?: string },
+    dto: { userId: number | string; newPassword: string },
+  ) {
+    // hanya ADMIN
+    if (actingUser.role !== 'ADMIN') {
+      throw new ForbiddenException('Hanya admin yang boleh reset password');
+    }
+
+    // validasi userId number
+    const userId = Number(dto.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException('userId tidak valid');
+    }
+
+    // cek kekuatan password
+    const issues = validatePasswordStrength(dto.newPassword);
+    if (issues.length) {
+      throw new BadRequestException('Password lemah: ' + issues.join(', '));
+    }
+
+    // pastikan user ada
+    const [u] = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (!u) throw new NotFoundException('User tidak ditemukan');
+
+    // hash baru
+    const newHash = await bcrypt.hash(dto.newPassword, 10);
+
+    try {
+      await this.db
+        .update(users)
+        .set({
+          password: newHash, // ✅ kolom sesuai schema
+          updatedAt: new Date(), // ✅ kolom sesuai schema
+        })
+        .where(eq(users.id, userId));
+
+      // Emit event kalau ada emitter yang diinject
+      this.events?.emit?.('user.password.reset', {
+        userId,
+        byAdminId: actingUser.id,
+      });
+
+      return { message: 'Password reset successfully' };
+    } catch (err: any) {
+      // kalau perlu debugging:
+      // console.error('adminResetPassword error:', err?.message, err);
+      throw new InternalServerErrorException('Failed to reset password');
+    }
+  }
+
+  async create(createUserDto: CreateUserDto, currentUserRole: string) {
+    const { email, password, firstName, lastName, role } = createUserDto;
+
+    // Only superadmin can create admin users
+    if (role === 'SUPPORT' && currentUserRole !== 'ADMIN') {
+      throw new ForbiddenException('Only Admin can create Support users');
+    }
+
+    // Hash password if provided
+    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
+
+    try {
+      const newUser = await this.db
+        .insert(users)
+        .values({
+          email,
+          password: hashedPassword,
+          firstName,
+          lastName,
+          role: role.toUpperCase(),
+        })
+        .returning();
+
+      return newUser[0];
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to create user');
+    }
+  }
+
+  async update(
+    id: number,
+    updateUserDto: UpdateUserDto,
+    currentUserRole: string,
+    currentUserId: number,
+  ) {
+    // Find the user to be updated
+    const userToUpdate = await this.findOne(id);
+
+    // Only Admin can update Support users
+    if (userToUpdate.role === 'SUPPORT' && currentUserRole !== 'ADMIN') {
+      throw new ForbiddenException('Only Admin can update Support users');
+    }
+
+    // Users can only update their own profile, unless they're admin or superadmin
+    if (
+      currentUserId !== id &&
+      !['SUPPORT', 'ADMIN'].includes(currentUserRole)
+    ) {
+      throw new ForbiddenException('You can only update your own profile');
+    }
+
+    let updateData: any = { ...updateUserDto };
+
+    // Only Admin can change roles
+    if (updateUserDto.role && currentUserRole !== 'ADMIN') {
+      delete updateData.role;
+    }
+
+    try {
+      const updatedUser = await this.db
+        .update(users)
+        .set({
+          ...updateData,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, id))
+        .returning();
+
+      return updatedUser[0];
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to update user');
+    }
+  }
+
+  async remove(id: number, currentUserRole: string) {
+    const userToDelete = await this.findOne(id);
+
+    // Only Admin can delete Support users
+    if (userToDelete.role === 'SUPPORT' && currentUserRole !== 'ADMIN') {
+      throw new ForbiddenException('Only Admin can delete Support users');
+    }
+
+    try {
+      await this.db.delete(users).where(eq(users.id, id));
+      return { message: 'User deleted successfully' };
+    } catch (error) {
+      throw new InternalServerErrorException('Failed to delete user');
+    }
+  }
+}

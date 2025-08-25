@@ -3,56 +3,37 @@ import { DataTableColumnHeader } from '@/components/ui/table/data-table-column-h
 import { Column, ColumnDef } from '@tanstack/react-table';
 import { Text } from 'lucide-react';
 import { CellAction } from './cell-action';
-import { Article, fakeArticleCategories } from '@/constants/mock-api';
+import {
+  createArticleColumnsConfig,
+  type ArticleColumnsConfig
+} from '@/lib/columns/article-columns';
 import Image from 'next/image';
+import { Article } from '@/types/entity';
+import { config as envConfig } from '@/config/env';
 
-// Helper function to ensure categories are available and convert to options format
-const formatCategoriesAsOptions = (categories: any[]) => {
-  return categories.map((category) => ({
-    value: category.name,
-    label: category.name.charAt(0).toUpperCase() + category.name.slice(1)
-  }));
-};
+// Re-export the type for convenience
+export type { ArticleColumnsConfig };
 
-// Function for async operations (recommended approach)
-export const getArticleCategoriesFromMockData = async () => {
-  try {
-    // Use the proper getAll method from mock API
-    const categories = await fakeArticleCategories.getAll({});
-    return formatCategoriesAsOptions(categories);
-  } catch (error) {
-    // Fallback: ensure initialization and try again
-    fakeArticleCategories.initialize();
-    const categories = await fakeArticleCategories.getAll({});
-    return formatCategoriesAsOptions(categories);
-  }
-};
-
-// Legacy function for synchronous access (only for table columns)
-const getCategoriesSync = () => {
-  // Ensure categories are initialized
-  if (fakeArticleCategories.records.length === 0) {
-    fakeArticleCategories.initialize();
-  }
-
-  return formatCategoriesAsOptions(fakeArticleCategories.records);
-};
-
-// Get article category options for table columns (synchronous)
-const ARTICLE_CATEGORY_OPTIONS = getCategoriesSync();
-
-export const columns: ColumnDef<Article>[] = [
+// Client-side columns implementation using server config
+export const createArticleColumnsFromConfig = (
+  config: ArticleColumnsConfig
+): ColumnDef<Article>[] => [
   {
-    accessorKey: 'image_url',
+    id: 'coverImageUrl',
+    accessorKey: 'coverImageUrl',
     header: 'IMAGE',
     cell: ({ row }) => {
       return (
-        <div className='relative aspect-square'>
+        <div className='relative aspect-square overflow-hidden'>
           <Image
-            src={row.getValue('image_url')}
+            src={
+              row.getValue('coverImageUrl')
+                ? `${envConfig.API_URL}${row.getValue('coverImageUrl')}`
+                : 'https://upload.wikimedia.org/wikipedia/commons/1/14/No_Image_Available.jpg'
+            }
             alt={row.getValue('title')}
             fill
-            className='rounded-lg'
+            className='rounded-lg object-cover'
           />
         </div>
       );
@@ -75,24 +56,25 @@ export const columns: ColumnDef<Article>[] = [
     enableSorting: true
   },
   {
-    id: 'category',
-    accessorKey: 'category',
+    id: 'categories',
+    accessorKey: 'categories',
     header: ({ column }: { column: Column<Article, unknown> }) => (
-      <DataTableColumnHeader column={column} title='Category' />
+      <DataTableColumnHeader column={column} title='Categories' />
     ),
     cell: ({ cell }) => {
-      const categoryValue = cell.getValue<Article['category']>();
-      const categoryOption = ARTICLE_CATEGORY_OPTIONS.find(
-        (option) => option.value === categoryValue
+      const categoryValue = cell.getValue<Article['categories']>();
+      return (
+        <div>
+          {categoryValue?.map((cat) => cat.name).join(', ') || 'No Category'}
+        </div>
       );
-      return <div>{categoryOption?.label || categoryValue}</div>;
     },
     enableColumnFilter: true,
     enableSorting: true,
     meta: {
       label: 'Category',
       variant: 'select',
-      options: ARTICLE_CATEGORY_OPTIONS.map((option) => ({
+      options: config.categoryOptions.map((option) => ({
         ...option,
         value: String(option.value)
       }))
@@ -124,9 +106,16 @@ export const columns: ColumnDef<Article>[] = [
       );
     }
   },
-
   {
     id: 'actions',
     cell: ({ row }) => <CellAction data={row.original} />
   }
 ];
+
+// Dynamic columns function that accepts categories (backward compatibility)
+export const createArticleColumns = (
+  categoryOptions: Array<{ value: string; label: string }> = []
+): ColumnDef<Article>[] => {
+  const config = createArticleColumnsConfig(categoryOptions);
+  return createArticleColumnsFromConfig(config);
+};

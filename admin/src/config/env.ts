@@ -1,0 +1,10 @@
+export const config = {
+  API_URL: process.env.NEXT_PUBLIC_API_URL,
+  SESSION_SECRET: process.env.SESSION_SECRET,
+  NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
+  NEXT_PUBLIC_SIGN_IN_URL: process.env.NEXT_PUBLIC_SIGN_IN_URL,
+  NEXT_PUBLIC_AFTER_SIGN_IN_URL: process.env.NEXT_PUBLIC_AFTER_SIGN_IN_URL,
+
+  NODE_ENV: process.env.NODE_ENV,
+  USE_HTTPS: process.env.USE_HTTPS
+};

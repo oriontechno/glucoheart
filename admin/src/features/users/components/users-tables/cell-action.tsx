@@ -8,10 +8,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { User } from '@/constants/mock-api';
+import { usersService } from '@/lib/api';
+import { User } from '@/types/entity';
 import { IconEdit, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface CellActionProps {
   data: User;
@@ -22,7 +24,17 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  const onConfirm = async () => {};
+  const onConfirm = async () => {
+    try {
+      usersService.deleteUser(data.id.toString());
+      toast.success('User deleted successfully');
+    } catch (error) {
+      toast.error('Failed to delete user');
+    } finally {
+      setOpen(false);
+      router.refresh();
+    }
+  };
 
   return (
     <>

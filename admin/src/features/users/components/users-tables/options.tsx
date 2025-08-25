@@ -1,7 +1,8 @@
 export const ROLE_OPTIONS = [
-  { value: 'user', label: 'User' },
-  { value: 'admin', label: 'Admin' },
-  { value: 'super_admin', label: 'Super Admin' }
+  { value: 'USER', label: 'User' },
+  { value: 'ADMIN', label: 'Admin' },
+  { value: 'NURSE', label: 'Nurse' },
+  { value: 'SUPPORT', label: 'Support' }
 ];
 
 export const ACTIVE_OPTIONS = [

@@ -1,23 +1,22 @@
-import { fakeUsers, User } from '@/constants/mock-api';
 import { notFound } from 'next/navigation';
 import UsersForm from './users-form';
+import { usersService } from '@/lib/api';
+import { UsersServerService } from '@/lib/api/users.server.service';
 
 type TUserViewPageProps = {
   userId: string;
 };
 
-export default async function UsersViewPage({
-  userId
-}: TUserViewPageProps) {
+export default async function UsersViewPage({ userId }: TUserViewPageProps) {
   let user = null;
   let pageTitle = 'Create New User';
 
   if (userId !== 'new') {
     try {
-      const data = await fakeUsers.getUserById(userId);
-      
-      if (data.success && data.user) {
-        user = data.user as User;
+      const data = await UsersServerService.getUserById(userId);
+
+      if (data.success && data.data) {
+        user = data.data;
         pageTitle = `Edit User`;
       } else {
         notFound();

@@ -1,0 +1,33 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production build
+/build
+/dist
+
+# misc
+.DS_Store
+*.pem
+
+# debug logs
+*.log
+
+# local env files
+.env
+.env.*
+!.env.example
+
+# drizzle migrations (if not committing)
+src/db/migrations/
+
+# uploads
+/uploads

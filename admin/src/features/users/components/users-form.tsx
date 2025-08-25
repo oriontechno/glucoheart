@@ -18,24 +18,21 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select';
-import { User } from '@/constants/mock-api';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import * as z from 'zod';
 import { ROLE_OPTIONS } from './users-tables/options';
+import { User } from '@/types/entity';
+import { usersService } from '@/lib/api/users.service';
 
-const formSchema = z.object({
-  name: z.string().min(2, {
-    message: 'User name must be at least 2 characters.'
-  }),
-  email: z.string().email({
-    message: 'Please enter a valid email address.'
-  }),
-  role: z.enum(['user', 'super_admin'], {
-    required_error: 'Please select a role.'
-  }),
-  is_active: z.boolean().default(false)
-});
+// Extract role values from ROLE_OPTIONS for type safety
+const roleValues = ROLE_OPTIONS.map((option) => option.value) as [
+  string,
+  ...string[]
+];
 
 export default function UsersForm({
   initialData,
@@ -44,11 +41,51 @@ export default function UsersForm({
   initialData: User | null;
   pageTitle: string;
 }) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isEditing = !!initialData?.id;
+
+  // Create dynamic schema based on edit mode
+  const createFormSchema = (isEditing: boolean) => {
+    const baseSchema = {
+      firstName: z.string().min(2, {
+        message: 'User first name must be at least 2 characters.'
+      }),
+      lastName: z.string().min(2, {
+        message: 'User last name must be at least 2 characters.'
+      }),
+      email: z.string().email({
+        message: 'Please enter a valid email address.'
+      }),
+      password: z.string().optional(),
+      role: z.enum(roleValues, {
+        required_error: 'Please select a role.'
+      })
+    };
+
+    if (isEditing) {
+      return z.object({
+        ...baseSchema,
+        password: z.string().optional()
+      });
+    } else {
+      return z.object({
+        ...baseSchema,
+        password: z.string().min(6, {
+          message: 'Password must be at least 6 characters.'
+        })
+      });
+    }
+  };
+
+  const formSchema = createFormSchema(isEditing);
+
   const defaultValues = {
-    name: initialData?.name || '',
+    firstName: initialData?.firstName || '',
+    lastName: initialData?.lastName || '',
     email: initialData?.email || '',
-    role: (initialData?.role || 'user') as 'user' | 'super_admin',
-    is_active: initialData?.is_active || false
+    role: (initialData?.role || 'USER') as (typeof roleValues)[number],
+    ...(isEditing ? { password: '' } : { password: '' }) // Always include password field
   };
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -56,8 +93,56 @@ export default function UsersForm({
     values: defaultValues
   });
 
-  function onSubmit(values: z.infer<typeof formSchema>) {
-    // Form submission logic would be implemented here
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    setIsSubmitting(true);
+
+    try {
+      if (initialData?.id) {
+        // Update existing user
+        // For updates, only include password if it's not empty
+        const updatePayload = { ...values };
+        if (!values.password || values.password.trim() === '') {
+          delete updatePayload.password;
+        }
+
+        await usersService.updateUser(initialData.id.toString(), updatePayload);
+        toast.success('User updated successfully');
+      } else {
+        // Create new user - ensure password is present
+        if (!values.password) {
+          toast.error('Password is required for new users');
+          setIsSubmitting(false);
+          return;
+        }
+        await usersService.createUser({
+          ...values,
+          password: values.password
+        });
+        toast.success('User created successfully');
+      }
+
+      router.push('/dashboard/users');
+      router.refresh();
+    } catch (error: any) {
+      // Handle different types of errors
+      if (error.response?.data?.message) {
+        toast.error(error.response.data.message);
+      } else if (error.response?.data?.errors) {
+        // Handle validation errors from backend
+        const errors = error.response.data.errors;
+        if (Array.isArray(errors)) {
+          errors.forEach((err: any) => {
+            toast.error(`${err.field}: ${err.message}`);
+          });
+        } else {
+          toast.error('Validation failed');
+        }
+      } else {
+        toast.error('An unexpected error occurred');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -73,12 +158,25 @@ export default function UsersForm({
             <div className='grid grid-cols-1 gap-6 md:grid-cols-1'>
               <FormField
                 control={form.control}
-                name='name'
+                name='firstName'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>User Name</FormLabel>
+                    <FormLabel>First Name</FormLabel>
                     <FormControl>
-                      <Input placeholder='Enter user name' {...field} />
+                      <Input placeholder='Enter first name' {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='lastName'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Last Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder='Enter last name' {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -94,6 +192,34 @@ export default function UsersForm({
                       <Input
                         type='email'
                         placeholder='Enter email address'
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name='password'
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Password{' '}
+                      {isEditing && (
+                        <span className='text-muted-foreground'>
+                          (leave empty to keep current)
+                        </span>
+                      )}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        type='password'
+                        placeholder={
+                          isEditing
+                            ? 'Enter new password (optional)'
+                            : 'Enter password'
+                        }
                         {...field}
                       />
                     </FormControl>
@@ -125,31 +251,18 @@ export default function UsersForm({
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name='is_active'
-                render={({ field }) => (
-                  <FormItem className='flex flex-row items-center justify-between rounded-lg border p-4'>
-                    <div className='space-y-0.5'>
-                      <FormLabel className='text-base'>Active Status</FormLabel>
-                      <div className='text-muted-foreground text-sm'>
-                        Set whether this user account is active
-                      </div>
-                    </div>
-                    <FormControl>
-                      <input
-                        type='checkbox'
-                        className='h-4 w-4'
-                        checked={field.value}
-                        onChange={field.onChange}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
             </div>
-            <Button type='submit'>
-              {initialData ? 'Update User' : 'Create User'}
+            <Button type='submit' disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <div className='mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent' />
+                  {initialData ? 'Updating...' : 'Creating...'}
+                </>
+              ) : initialData ? (
+                'Update User'
+              ) : (
+                'Create User'
+              )}
             </Button>
           </form>
         </Form>

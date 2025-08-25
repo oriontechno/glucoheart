@@ -110,8 +110,6 @@ export const fakeUsers = {
       search
     });
 
-    console.log({ roles });
-
     // Handle sorting
     if (sort) {
       try {
