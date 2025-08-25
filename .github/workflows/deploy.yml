@@ -3,7 +3,7 @@ name: Deploy Glucoheart
 on:
   push:
     branches:
-      - test # ganti sesuai branch
+      - test # ganti sesuai branch yang mau auto deploy
 
 jobs:
   deploy:
@@ -21,12 +21,21 @@ jobs:
       - name: Install pnpm
         run: npm install -g pnpm
 
-      - name: Setup SSH key
+      - name: Add VPS to known_hosts
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.VPS_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Test SSH connection
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          script: |
+            echo "✅ SSH connection works!"
+            hostname
+            whoami
 
       - name: Build Backend
         working-directory: ./backend
@@ -40,19 +49,7 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm run build
 
-      - name: Deploy Admin
-        run: |
-          rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
-            ./admin/.next ./admin/public ./admin/package.json \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/admin/
-
-      - name: Deploy Backend
-        run: |
-          rsync -avz --delete -e "ssh -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no" \
-            ./backend/dist ./backend/package.json \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/glucoheart/backend/
-
-      - name: Install deps & Restart
+      - name: Build & Restart on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -60,11 +57,15 @@ jobs:
           key: ${{ secrets.VPS_KEY }}
           script: |
             export PATH=$HOME/.nvm/versions/node/v22.13.0/bin:$PATH
+            node -v
+            pnpm -v
 
             cd /var/www/glucoheart/admin
-            HUSKY=0 pnpm install --frozen-lockfile --prod
-            pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin --interpreter $(which node)
+            pnpm install --frozen-lockfile
+            pnpm build
+            pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin --interpreter $HOME/.nvm/versions/node/v22.13.0/bin/node
 
             cd /var/www/glucoheart/backend
-            HUSKY=0 pnpm install --frozen-lockfile --prod
-            pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend --interpreter $(which node)
+            pnpm install --frozen-lockfile
+            pnpm build
+            pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend --interpreter $HOME/.nvm/versions/node/v22.13.0/bin/node
