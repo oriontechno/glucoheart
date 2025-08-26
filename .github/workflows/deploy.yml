@@ -30,6 +30,12 @@ jobs:
           pnpm install --no-frozen-lockfile
           pnpm build
 
+      - name: Build Admin
+        working-directory: ./admin
+        run: |
+          pnpm install --no-frozen-lockfile
+          pnpm build
+
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -48,8 +54,14 @@ jobs:
             git pull origin test
 
             # Install production dependencies only
-            cd backend
+            cd admin
             pnpm install --no-frozen-lockfile --ignore-scripts
+
+            cd ../backend
+            pnpm install --no-frozen-lockfile --ignore-scripts
+
+            # Run database migrations and build
+            pnpm drizzle-kit migrate
 
       - name: Sync Built Files
         uses: appleboy/scp-action@v0.1.7
@@ -57,8 +69,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          source: "backend/dist"
-          # source: "backend/dist,admin/.next"
+          source: "backend/dist,admin/.next"
           target: "/var/www/glucoheart/"
           overwrite: true
 
@@ -75,6 +86,7 @@ jobs:
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
             # Restart services
+            pm2 restart glucoheart-admin || pm2 start "pnpm start" --name glucoheart-admin --cwd /var/www/glucoheart/admin
             pm2 restart glucoheart-backend || pm2 start "pnpm start" --name glucoheart-backend --cwd /var/www/glucoheart/backend
 
             # Save PM2
