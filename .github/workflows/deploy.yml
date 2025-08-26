@@ -60,9 +60,6 @@ jobs:
             cd ../backend
             pnpm install --no-frozen-lockfile --ignore-scripts
 
-            # Run database migrations and build
-            pnpm drizzle-kit migrate
-
       - name: Sync Built Files
         uses: appleboy/scp-action@v0.1.7
         with:
