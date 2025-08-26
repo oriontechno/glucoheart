@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1755083987895,
-      "tag": "0000_cynical_warbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1754922037759,
-      "tag": "0001_natural_madame_hydra",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1755309497961,
-      "tag": "0002_ancient_blue_blade",
+      "when": 1756173561316,
+      "tag": "0000_red_bug",
       "breakpoints": true
     }
   ]

@@ -17,12 +17,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: "10"
+          version: '10'
 
       - name: Build Backend
         working-directory: ./backend
@@ -51,15 +51,17 @@ jobs:
             cd backend
             pnpm install --no-frozen-lockfile --ignore-scripts
 
+            pnpm drizzle-kit migrate
+
       - name: Sync Built Files
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
-          source: "backend/dist"
+          source: 'backend/dist'
           # source: "backend/dist,admin/.next"
-          target: "/var/www/glucoheart/"
+          target: '/var/www/glucoheart/'
           overwrite: true
 
       - name: Restart Services
