@@ -50,6 +50,9 @@ jobs:
             cd backend
             pnpm install --no-frozen-lockfile --ignore-scripts
 
+            pnpm drizzle-kit generate
+            pnpm drizzle-kit migrate
+
       - name: Sync Built Files
         uses: appleboy/scp-action@v0.1.7
         with:
