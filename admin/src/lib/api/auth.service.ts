@@ -12,7 +12,7 @@ interface SignInResponse {
     email: string;
     firstName: string;
     lastName: string;
-    role: string;
+    role: 'ADMIN' | 'SUPPORT' | 'NURSE' | 'USER';
     profilePicture?: string;
   };
 }
