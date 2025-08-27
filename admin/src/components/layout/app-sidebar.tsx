@@ -47,6 +47,7 @@ import { toast } from 'sonner';
 import { Icons } from '../icons';
 import { OrgSwitcher } from '../org-switcher';
 import { UserAvatarProfile } from '../user-avatar-profile';
+import { User } from '@/types/entity';
 
 export const company = {
   name: 'Acme Inc',
@@ -60,7 +61,7 @@ const tenants = [
   { id: '3', name: 'Gamma Ltd' }
 ];
 
-export default function AppSidebar() {
+export default function AppSidebar({ me }: { me: User }) {
   const pathname = usePathname();
   const { isOpen } = useMediaQuery();
   const router = useRouter();
@@ -128,6 +129,11 @@ export default function AppSidebar() {
           <SidebarMenu>
             {navItems.map((item) => {
               const Icon = item.icon ? Icons[item.icon] : Icons.logo;
+
+              if (!item.allowedRoles?.includes(me.role)) {
+                return null;
+              }
+
               return item?.items && item?.items?.length > 0 ? (
                 <Collapsible
                   key={item.title}
@@ -148,18 +154,26 @@ export default function AppSidebar() {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
-                        {item.items?.map((subItem) => (
-                          <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              asChild
-                              isActive={pathname === subItem.url}
-                            >
-                              <Link href={subItem.url}>
-                                <span>{subItem.title}</span>
-                              </Link>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
+                        {item.items && item.items?.length > 0
+                          ? item.items.map((subItem) => {
+                              if (!subItem.allowedRoles?.includes(me.role)) {
+                                return null;
+                              }
+
+                              return (
+                                <SidebarMenuSubItem key={subItem.title}>
+                                  <SidebarMenuSubButton
+                                    asChild
+                                    isActive={pathname === subItem.url}
+                                  >
+                                    <Link href={subItem.url}>
+                                      <span>{subItem.title}</span>
+                                    </Link>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })
+                          : null}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>

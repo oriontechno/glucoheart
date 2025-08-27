@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-
-// ============================================================================
-// TYPES & INTERFACES
-// ============================================================================
-export type UserRole = 'ADMIN' | 'SUPPORT' | 'NURSE' | 'USER';
+import { UserRole } from './types/entity';
 
 export interface SessionData {
   isLoggedIn: boolean;
@@ -20,9 +16,6 @@ export interface RouteConfig {
   isPublic?: boolean;
 }
 
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
 class RouteManager {
   private readonly routes: RouteConfig[] = [
     // Public routes

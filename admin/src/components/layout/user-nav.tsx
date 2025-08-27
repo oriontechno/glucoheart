@@ -13,7 +13,6 @@ import { UserAvatarProfile } from '@/components/user-avatar-profile';
 import { useRouter } from 'next/navigation';
 export function UserNav() {
   const router = useRouter();
-  // if (user) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
