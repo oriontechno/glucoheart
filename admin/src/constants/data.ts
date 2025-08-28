@@ -19,7 +19,7 @@ export const navItems: NavItem[] = [
     icon: 'dashboard',
     isActive: false,
     shortcut: ['d', 'd'],
-    items: [] // Empty array as there are no child items for Dashboard
+    allowedRoles: ['ADMIN', 'SUPPORT']
   },
   // {
   //   title: 'Product',
@@ -35,18 +35,21 @@ export const navItems: NavItem[] = [
     icon: 'post',
     shortcut: ['a', 'a'],
     isActive: true,
+    allowedRoles: ['ADMIN', 'SUPPORT'],
     items: [
       {
         title: 'Education Articles',
         url: '/dashboard/articles',
         icon: 'post',
-        shortcut: ['e', 'a']
+        shortcut: ['e', 'a'],
+        allowedRoles: ['ADMIN', 'SUPPORT']
       },
       {
         title: 'Article Categories',
         url: '/dashboard/article-categories',
         icon: 'post',
-        shortcut: ['a', 'c']
+        shortcut: ['a', 'c'],
+        allowedRoles: ['ADMIN', 'SUPPORT']
       }
     ]
   },
@@ -55,7 +58,8 @@ export const navItems: NavItem[] = [
     url: '/dashboard/chat-sessions',
     icon: 'laptop',
     shortcut: ['c', 's'],
-    isActive: false
+    isActive: false,
+    allowedRoles: ['ADMIN', 'SUPPORT']
   },
   {
     title: 'Discussions',
@@ -63,7 +67,7 @@ export const navItems: NavItem[] = [
     icon: 'discussion',
     shortcut: ['d', 'd'],
     isActive: false,
-    items: []
+    allowedRoles: ['ADMIN', 'SUPPORT']
   },
   {
     title: 'Users',
@@ -71,7 +75,7 @@ export const navItems: NavItem[] = [
     icon: 'user',
     shortcut: ['u', 'u'],
     isActive: false,
-    items: [] // No child items
+    allowedRoles: ['ADMIN']
   }
 ];
 

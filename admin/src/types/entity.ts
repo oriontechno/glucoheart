@@ -3,9 +3,11 @@ export type User = {
   firstName: string;
   lastName: string;
   email: string;
-  role: 'USER' | 'ADMIN' | 'NURSE' | 'SUPPORT';
+  role: UserRole;
   created_at: string;
 };
+
+export type UserRole = 'ADMIN' | 'SUPPORT' | 'NURSE' | 'USER';
 
 export type ArticleCategory = {
   id: number;
