@@ -33,8 +33,8 @@ export const healthMetrics = pgTable(
     // Catatan opsional
     notes: text('notes'),
 
-    createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-    updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+    createdAt: timestamp('created_at').default(sql`now()`),
+    updatedAt: timestamp('updated_at').default(sql`now()`),
   },
   (t) => ({
     byUserAndDate: index('idx_health_metrics_user_date').on(

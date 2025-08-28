@@ -8,7 +8,7 @@ import {
   uniqueIndex,
   index,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { users } from './users';
 
 export const discussionRooms = pgTable(
@@ -26,12 +26,8 @@ export const discussionRooms = pgTable(
     lastMessageId: integer('last_message_id'),
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
 
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at').default(sql`now()`),
+    updatedAt: timestamp('updated_at').default(sql`now()`),
   },
   (t) => ({
     idxUpdatedAt: index('idx_discussion_rooms_updated_at').on(t.updatedAt),
