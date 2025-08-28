@@ -4,19 +4,19 @@ import HealthMetricForm from './health-metrics-form';
 import { HealthMetricsServerService } from '@/lib/api/health-metrics.server.service';
 
 type THealthMetricViewPageProps = {
-  healthMetricsId: number | string;
+  healthMetricId: number | string;
 };
 
 export default async function HealthMetricsViewPage({
-  healthMetricsId
+  healthMetricId
 }: THealthMetricViewPageProps) {
   let healthMetrics = null;
   let pageTitle = 'Create New Health Metric';
 
-  if (healthMetricsId !== 'new') {
+  if (healthMetricId !== 'new') {
     try {
       const data = await HealthMetricsServerService.getHealthMetricById(
-        Number(healthMetricsId)
+        Number(healthMetricId)
       );
 
       if (data.success && data.data) {
