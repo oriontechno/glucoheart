@@ -7,18 +7,12 @@ import { HealthMetric } from '@/types/entity';
 
 export const columns: ColumnDef<HealthMetric>[] = [
   {
-    id: 'search',
+    id: 'id',
     accessorKey: 'id',
     header: ({ column }: { column: Column<HealthMetric, unknown> }) => (
       <DataTableColumnHeader column={column} title='ID' />
     ),
     cell: ({ cell }) => <div>{cell.getValue<HealthMetric['id']>()}</div>,
-    meta: {
-      label: 'ID',
-      placeholder: 'Search...',
-      variant: 'text',
-      icon: Text
-    },
     enableColumnFilter: true,
     enableSorting: true
   },
@@ -30,7 +24,13 @@ export const columns: ColumnDef<HealthMetric>[] = [
     ),
     cell: ({ cell }) => <div>{cell.getValue<HealthMetric['userId']>()}</div>,
     enableColumnFilter: true,
-    enableSorting: true
+    enableSorting: true,
+    meta: {
+      label: 'User ID',
+      placeholder: 'User ID',
+      variant: 'number',
+      icon: Text
+    }
   },
   {
     id: 'bloodGlucoseRandom',
@@ -116,6 +116,7 @@ export const columns: ColumnDef<HealthMetric>[] = [
     enableSorting: true
   },
   {
+    id: 'createdAt',
     accessorKey: 'createdAt',
     header: ({ column }: { column: Column<HealthMetric, unknown> }) => (
       <DataTableColumnHeader column={column} title='Created At' />
@@ -127,6 +128,33 @@ export const columns: ColumnDef<HealthMetric>[] = [
         <div>
           {createdAt
             ? new Date(createdAt as string | number | Date).toLocaleDateString(
+                'en-US',
+                {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }
+              )
+            : ''}
+        </div>
+      );
+    }
+  },
+  {
+    id: 'updatedAt',
+    accessorKey: 'updatedAt',
+    header: ({ column }: { column: Column<HealthMetric, unknown> }) => (
+      <DataTableColumnHeader column={column} title='Updated At' />
+    ),
+    enableSorting: true,
+    cell: ({ row }) => {
+      const updatedAt = row.getValue('updatedAt');
+      return (
+        <div>
+          {updatedAt
+            ? new Date(updatedAt as string | number | Date).toLocaleDateString(
                 'en-US',
                 {
                   year: 'numeric',

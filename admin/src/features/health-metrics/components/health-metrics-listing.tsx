@@ -9,14 +9,14 @@ type HealthMetricsListingPageProps = {};
 export default async function HealthMetricsListingPage({}: HealthMetricsListingPageProps) {
   // Showcasing the use of search params cache in nested RSCs
   const page = searchParamsCache.get('page');
-  const search = searchParamsCache.get('search');
+  const userId = searchParamsCache.get('userId');
   const pageLimit = searchParamsCache.get('perPage');
   const sort = searchParamsCache.get('sort');
 
   const filters = {
     page,
     limit: pageLimit,
-    ...(search && { search }),
+    ...(userId && { userId }),
     ...(sort && { sort })
   };
 
