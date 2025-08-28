@@ -10,6 +10,7 @@ import {
 import Image from 'next/image';
 import { Article } from '@/types/entity';
 import { config as envConfig } from '@/config/env';
+import { Badge } from '@/components/ui/badge';
 
 // Re-export the type for convenience
 export type { ArticleColumnsConfig };
@@ -56,6 +57,24 @@ export const createArticleColumnsFromConfig = (
     enableSorting: true
   },
   {
+    id: 'status',
+    accessorKey: 'status',
+    header: ({ column }: { column: Column<Article, unknown> }) => (
+      <DataTableColumnHeader column={column} title='Status' />
+    ),
+    cell: ({ cell }) => {
+      const statusValue = cell.getValue<Article['status']>();
+      return (
+        <Badge
+          color={statusValue === 'published' ? 'green' : 'red'}
+          variant={'default'}
+        >
+          {statusValue || 'No Status'}
+        </Badge>
+      );
+    }
+  },
+  {
     id: 'categories',
     accessorKey: 'categories',
     header: ({ column }: { column: Column<Article, unknown> }) => (
@@ -92,6 +111,32 @@ export const createArticleColumnsFromConfig = (
         <div>
           {createdAt
             ? new Date(createdAt as string | number | Date).toLocaleDateString(
+                'en-US',
+                {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }
+              )
+            : ''}
+        </div>
+      );
+    }
+  },
+  {
+    accessorKey: 'updated_at',
+    header: ({ column }: { column: Column<Article, unknown> }) => (
+      <DataTableColumnHeader column={column} title='Updated At' />
+    ),
+    enableSorting: true,
+    cell: ({ row }) => {
+      const updatedAt = row.getValue('updated_at');
+      return (
+        <div>
+          {updatedAt
+            ? new Date(updatedAt as string | number | Date).toLocaleDateString(
                 'en-US',
                 {
                   year: 'numeric',
