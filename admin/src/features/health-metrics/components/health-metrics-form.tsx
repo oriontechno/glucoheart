@@ -101,7 +101,10 @@ export default function HealthMetricForm({
       </CardHeader>
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className='space-y-6'>
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className='grid grid-cols-1 gap-6 md:grid-cols-2'
+          >
             {/* Blood Glucose Random */}
             <FormField
               control={form.control}
@@ -233,38 +236,12 @@ export default function HealthMetricForm({
               )}
             />
 
-            {/* Date Time */}
-            <FormField
-              control={form.control}
-              name='dateTime'
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Date & Time</FormLabel>
-                  <FormControl>
-                    <Input
-                      type='datetime-local'
-                      {...field}
-                      value={
-                        field.value
-                          ? new Date(field.value).toISOString().slice(0, 16)
-                          : ''
-                      }
-                      onChange={(e) =>
-                        field.onChange(new Date(e.target.value).toISOString())
-                      }
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             {/* Notes */}
             <FormField
               control={form.control}
               name='notes'
               render={({ field }) => (
-                <FormItem>
+                <FormItem className='col-span-1 md:col-span-2'>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
                     <Textarea
@@ -278,7 +255,7 @@ export default function HealthMetricForm({
               )}
             />
 
-            <Button type='submit' className='w-full'>
+            <Button type='submit' className='col-span-1 w-full md:col-span-2'>
               {initialData ? 'Update Health Metric' : 'Create Health Metric'}
             </Button>
           </form>
