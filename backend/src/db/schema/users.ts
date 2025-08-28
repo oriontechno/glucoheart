@@ -11,8 +11,8 @@ export const users = pgTable('users', {
   lastName: varchar('last_name', { length: 100 }),
   role: roleEnum('role').notNull().default('USER'),
   profilePicture: varchar('profile_picture', { length: 255 }),
-  createdAt: timestamp('created_at').default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: timestamp('updated_at').default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp('created_at').default(sql`now()`),
+  updatedAt: timestamp('updated_at').default(sql`now()`),
 });
 
 // Pendekatan yang lebih simpel untuk relasi
