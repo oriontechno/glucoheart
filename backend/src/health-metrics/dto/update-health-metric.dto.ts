@@ -12,10 +12,6 @@ export class UpdateHealthMetricDto {
   bloodPressure?: string;
 
   @IsOptional()
-  @IsISO8601()
-  dateTime?: string;
-
-  @IsOptional()
   @IsString()
   notes?: string;
 }
