@@ -52,7 +52,6 @@ export class HealthMetricsService {
         bloodPressure: dto.bloodPressure,
         dateTime: when,
         notes: dto.notes ?? null,
-        updatedAt: new Date(),
       })
       .returning();
 
@@ -209,7 +208,7 @@ export class HealthMetricsService {
     if (!cur) throw new NotFoundException('Record not found');
     this.ensureOwnerOrStaff(acting, cur.userId);
 
-    const patch: any = { updatedAt: new Date() };
+    const patch: any = { updatedAt: sql`now()` };
 
     if (dto.bloodGlucoseRandom !== undefined)
       patch.bloodGlucoseRandom = dto.bloodGlucoseRandom;

@@ -9,7 +9,7 @@ import {
   index,
   boolean,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { users } from './users';
 
 export const articleStatus = pgEnum('article_status', ['draft', 'published']);
@@ -36,12 +36,8 @@ export const articles = pgTable(
     }),
 
     publishedAt: timestamp('published_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at').default(sql`now()`),
+    updatedAt: timestamp('updated_at').default(sql`now()`),
   },
   (t) => ({
     uqSlug: uniqueIndex('uq_articles_slug').on(t.slug),

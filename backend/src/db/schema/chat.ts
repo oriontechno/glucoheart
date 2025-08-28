@@ -8,7 +8,7 @@ import {
   uniqueIndex,
   index,
 } from 'drizzle-orm/pg-core';
-import { relations } from 'drizzle-orm';
+import { relations, sql } from 'drizzle-orm';
 import { users } from './users';
 
 export const chatSessionType = pgEnum('chat_session_type', [
@@ -44,12 +44,8 @@ export const chatSessions = pgTable(
     lastMessageId: integer('last_message_id'), // keep nullable to avoid circular FK
     lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
 
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    updatedAt: timestamp('updated_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
+    createdAt: timestamp('created_at').default(sql`now()`),
+    updatedAt: timestamp('updated_at').default(sql`now()`),
   },
   (t) => ({
     // Enforce one unique 1:1 session per normalized pair (NULLs allowed for groups)
