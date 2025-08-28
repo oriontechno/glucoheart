@@ -29,6 +29,13 @@ export async function POST(request: NextRequest) {
       sessionOptions
     );
 
+    if (user.role === 'NURSE' || user.role === 'USER') {
+      return NextResponse.json({
+        success: true,
+        user
+      });
+    }
+
     // Store session data
     session.access_token = access_token;
     session.user = user;

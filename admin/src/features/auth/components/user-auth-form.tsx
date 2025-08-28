@@ -59,11 +59,20 @@ export default function UserAuthForm() {
       try {
         const result = await authService.signIn(data.email, data.password);
 
-        toast.success(`Welcome back, ${result.user.firstName}!`);
+        if (result.user.role === 'ADMIN' || result.user.role === 'SUPPORT') {
+          toast.success(`Welcome back, ${result.user.firstName}!`);
 
-        // Redirect to dashboard or callback URL
-        router.push(callbackUrl);
-        router.refresh();
+          // Redirect to dashboard or callback URL
+          router.push(callbackUrl);
+          router.refresh();
+        } else if (
+          result.user.role === 'USER' ||
+          result.user.role === 'NURSE'
+        ) {
+          toast.error(
+            `The ${result.user.role.charAt(0).toUpperCase() + result.user.role.slice(1).toLowerCase()} role cannot log in to the dashboard, ${result.user.firstName}!`
+          );
+        }
       } catch (err: any) {
         console.error('Login error:', err);
 

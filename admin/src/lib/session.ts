@@ -30,7 +30,7 @@ export const sessionOptions: SessionOptions = {
     // Hanya secure jika production dan menggunakan HTTPS
     secure: isProduction && useHTTPS,
     httpOnly: true,
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: 60 * 60 * 24, // 24 hours
     // Sesuaikan sameSite berdasarkan environment
     sameSite: isVPSWithHTTP ? 'lax' : isProduction ? 'none' : 'lax',
     path: '/',
