@@ -151,7 +151,6 @@ export default function ArticlesForm({
 
       return [];
     })(),
-    coverImageAlt: initialData?.coverImageAlt || '',
     coverImageUrl: initialData?.coverImageUrl || '',
     cover: [] as File[] // FileUploader expects File[] type
   };
