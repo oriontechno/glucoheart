@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, IsISO8601 } from 'class-validator';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateHealthMetricDto {
   /** Admin/Support boleh isi, user biasa diabaikan (pakai id token) */
@@ -14,9 +14,6 @@ export class CreateHealthMetricDto {
 
   @IsString()
   bloodPressure!: string;
-
-  @IsISO8601()
-  dateTime!: string; // ISO string
 
   @IsOptional()
   @IsString()

@@ -28,7 +28,6 @@ export const healthMetrics = pgTable(
 
     // Wajib: tekanan darah & waktu pengukuran
     bloodPressure: varchar('blood_pressure', { length: 20 }).notNull(), // format "120/80"
-    dateTime: timestamp('date_time', { withTimezone: false }).notNull(),
 
     // Catatan opsional
     notes: text('notes'),
@@ -39,7 +38,7 @@ export const healthMetrics = pgTable(
   (t) => ({
     byUserAndDate: index('idx_health_metrics_user_date').on(
       t.userId,
-      t.dateTime,
+      t.createdAt,
     ),
   }),
 );

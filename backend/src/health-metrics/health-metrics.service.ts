@@ -31,14 +31,32 @@ export class HealthMetricsService {
     }
   }
 
+  private hasTimePart(s: string) {
+    return /[TtZz]/.test(s) || /[+\-]\d{2}:\d{2}$/.test(s);
+  }
+
+  private parseBoundToUTC(input: string, kind: 'from' | 'to'): Date {
+    const raw = String(input || '').trim();
+    if (!raw) throw new BadRequestException(`Invalid ${kind}`);
+
+    // Jika user sudah kirim waktu/offset (ada 'T', 'Z', atau +07:00), pakai apa adanya
+    if (this.hasTimePart(raw)) {
+      const d = new Date(raw);
+      if (isNaN(+d)) throw new BadRequestException(`Invalid ${kind}`);
+      return d;
+    }
+
+    // MODE UTC-DAY: tanggal saja → rentang UTC hari itu
+    const iso = kind === 'to' ? `${raw}T23:59:59.999Z` : `${raw}T00:00:00.000Z`;
+    const d = new Date(iso);
+    if (isNaN(+d)) throw new BadRequestException(`Invalid ${kind}`);
+    return d;
+  }
+
   // CREATE
   async create(acting: RequestUser, dto: CreateHealthMetricDto) {
     const targetUserId =
       this.isStaff(acting.role) && dto.userId ? dto.userId : acting.id;
-
-    // validasi tanggal
-    const when = new Date(dto.dateTime);
-    if (isNaN(+when)) throw new BadRequestException('Invalid dateTime');
 
     const [row] = await this.db
       .insert(healthMetrics)
@@ -50,7 +68,6 @@ export class HealthMetricsService {
         hemoglobin: dto.hemoglobin ?? null,
         bloodGlucosePostprandial: dto.bloodGlucosePostprandial ?? null,
         bloodPressure: dto.bloodPressure,
-        dateTime: when,
         notes: dto.notes ?? null,
       })
       .returning();
@@ -90,7 +107,6 @@ export class HealthMetricsService {
         hemoglobin: healthMetrics.hemoglobin,
         bloodGlucosePostprandial: healthMetrics.bloodGlucosePostprandial,
         bloodPressure: healthMetrics.bloodPressure,
-        dateTime: healthMetrics.dateTime,
         notes: healthMetrics.notes,
         createdAt: healthMetrics.createdAt,
         updatedAt: healthMetrics.updatedAt,
@@ -98,7 +114,7 @@ export class HealthMetricsService {
       .from(healthMetrics)
       .leftJoin(users, eq(users.id, healthMetrics.userId))
       .where(eq(healthMetrics.userId, userId))
-      .orderBy(desc(healthMetrics.dateTime));
+      .orderBy(desc(healthMetrics.updatedAt));
 
     return {
       success: true,
@@ -111,14 +127,14 @@ export class HealthMetricsService {
 
   // LIST (pagination + filter)
   async list(
-    acting: RequestUser,
+    acting: { id: number; role?: string },
     params: {
       page?: number;
       limit?: number;
       userId?: number; // staff only
       from?: string;
       to?: string;
-      sort?: 'asc' | 'desc'; // by dateTime
+      sort?: 'asc' | 'desc'; // by updatedAt (atau ganti ke dateTime jika mau)
     },
   ) {
     const page = Math.max(Number(params.page ?? 1), 1);
@@ -134,27 +150,27 @@ export class HealthMetricsService {
         : undefined
       : acting.id;
 
-    if (!isStaff) whereParts.push(eq(healthMetrics.userId, acting.id));
-    else if (targetUserId)
+    if (!isStaff) {
+      whereParts.push(eq(healthMetrics.userId, acting.id));
+    } else if (targetUserId) {
       whereParts.push(eq(healthMetrics.userId, targetUserId));
+    }
 
+    // ⬇️ use Asia/Jakarta semantics for date-only strings
     if (params.from) {
-      const d = new Date(params.from);
-      if (isNaN(+d)) throw new BadRequestException('Invalid from');
-      whereParts.push(gte(healthMetrics.dateTime as any, d));
+      const dFrom = this.parseBoundToUTC(params.from, 'from');
+      whereParts.push(gte(healthMetrics.updatedAt as any, dFrom));
     }
     if (params.to) {
-      const d = new Date(params.to);
-      if (isNaN(+d)) throw new BadRequestException('Invalid to');
-      whereParts.push(lte(healthMetrics.dateTime as any, d));
+      const dTo = this.parseBoundToUTC(params.to, 'to');
+      whereParts.push(lte(healthMetrics.updatedAt as any, dTo));
     }
 
     const where = whereParts.length ? and(...whereParts) : undefined;
-
     const order =
       params.sort === 'asc'
-        ? asc(healthMetrics.dateTime)
-        : desc(healthMetrics.dateTime);
+        ? asc(healthMetrics.updatedAt)
+        : desc(healthMetrics.updatedAt);
 
     const totalRows = await this.db
       .select({ c: sql<number>`count(*)::int` as any })
@@ -171,14 +187,9 @@ export class HealthMetricsService {
         hemoglobin: healthMetrics.hemoglobin,
         bloodGlucosePostprandial: healthMetrics.bloodGlucosePostprandial,
         bloodPressure: healthMetrics.bloodPressure,
-        dateTime: healthMetrics.dateTime,
         notes: healthMetrics.notes,
         createdAt: healthMetrics.createdAt,
         updatedAt: healthMetrics.updatedAt,
-        // optional: info user
-        userFirstName: users.firstName,
-        userLastName: users.lastName,
-        userEmail: users.email,
       })
       .from(healthMetrics)
       .leftJoin(users, eq(users.id, healthMetrics.userId))
@@ -221,12 +232,6 @@ export class HealthMetricsService {
 
     if (dto.bloodPressure !== undefined)
       patch.bloodPressure = dto.bloodPressure;
-
-    if (dto.dateTime !== undefined) {
-      const d = new Date(dto.dateTime);
-      if (isNaN(+d)) throw new BadRequestException('Invalid dateTime');
-      patch.dateTime = d;
-    }
 
     if (dto.notes !== undefined) patch.notes = dto.notes ?? null;
 
