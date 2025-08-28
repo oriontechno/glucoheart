@@ -50,7 +50,6 @@ jobs:
             cd backend
             pnpm install --no-frozen-lockfile --ignore-scripts
 
-            pnpm drizzle-kit generate
             pnpm drizzle-kit push
 
       - name: Sync Built Files
