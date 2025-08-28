@@ -21,6 +21,17 @@ export class UsersServerService {
     };
   }
 
+  static async getMe() {
+    const authConfig = await this.getAuthenticatedRequest();
+
+    const response = await api.get('/auth/me', authConfig);
+
+    return {
+      success: true,
+      data: response.data
+    };
+  }
+
   static async getUsers(filters: {
     page?: number;
     limit?: number;
