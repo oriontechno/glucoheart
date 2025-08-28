@@ -10,10 +10,8 @@ export const articleCategoriesService = {
       });
       return response.data;
     } catch (error) {
-      console.error('API call failed, falling back to mock data:', error);
-      // Fallback to mock data if API fails
-      const categories = await fakeArticleCategories.getAll({});
-      return categories;
+      toast.error('Failed to fetch article categories.');
+      throw new Error('Failed to fetch article categories');
     }
   },
 

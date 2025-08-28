@@ -21,14 +21,15 @@ export const navItems: NavItem[] = [
     shortcut: ['d', 'd'],
     allowedRoles: ['ADMIN', 'SUPPORT']
   },
-  // {
-  //   title: 'Product',
-  //   url: '/dashboard/product',
-  //   icon: 'product',
-  //   shortcut: ['p', 'p'],
-  //   isActive: false,
-  //   items: [] // No child items
-  // },
+  {
+    title: 'Health Metrics',
+    url: '/dashboard/health-metrics',
+    icon: 'health',
+    shortcut: ['h', 'm'],
+    isActive: false,
+    allowedRoles: ['ADMIN', 'SUPPORT'],
+    items: []
+  },
   {
     title: 'Articles',
     url: '#',

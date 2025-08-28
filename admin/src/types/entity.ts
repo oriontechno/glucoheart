@@ -29,3 +29,18 @@ export type Article = {
   coverImageUrl?: string;
   cover?: File; // Optional for existing articles
 };
+
+export type HealthMetric = {
+  id: number;
+  userId: number;
+  bloodGlucoseRandom: number;
+  bloodGlucoseFasting: number;
+  hba1c: number;
+  hemoglobin: number;
+  bloodGlucosePostprandial: number;
+  bloodPressure: string;
+  dateTime: string; // bisa pakai Date kalau mau langsung parsing
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+};
