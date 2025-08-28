@@ -14,6 +14,7 @@ import { CommonModule } from './common/common.module';
 import { ChatModule } from './chat/chat.module';
 import { DiscussionModule } from './discussion/discussion.module';
 import { ZodModule } from './zod/zod.module';
+import { HealthMetricsModule } from './health-metrics/health-metrics.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ZodModule } from './zod/zod.module';
     ChatModule,
     DiscussionModule,
     ZodModule,
+    HealthMetricsModule,
   ],
   controllers: [AppController],
   providers: [
