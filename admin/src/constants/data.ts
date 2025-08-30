@@ -64,11 +64,27 @@ export const navItems: NavItem[] = [
   },
   {
     title: 'Discussions',
-    url: '/dashboard/discussions',
+    url: '#',
     icon: 'discussion',
     shortcut: ['d', 'd'],
-    isActive: false,
-    allowedRoles: ['ADMIN', 'SUPPORT']
+    isActive: true,
+    allowedRoles: ['ADMIN', 'SUPPORT'],
+    items: [
+      {
+        title: 'All Discussions',
+        url: '/dashboard/discussions',
+        icon: 'discussion',
+        shortcut: ['a', 'd'],
+        allowedRoles: ['ADMIN', 'SUPPORT']
+      },
+      {
+        title: 'Chat Discussions',
+        url: '/dashboard/chat-discussions',
+        icon: 'discussion',
+        shortcut: ['c', 'd'],
+        allowedRoles: ['ADMIN', 'SUPPORT']
+      }
+    ]
   },
   {
     title: 'Users',
