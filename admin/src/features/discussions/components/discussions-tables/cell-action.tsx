@@ -13,6 +13,7 @@ import { Discussion } from '@/types/chat';
 import { IconEdit, IconDotsVertical, IconTrash } from '@tabler/icons-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface CellActionProps {
   data: Discussion;
@@ -25,9 +26,11 @@ export const CellAction: React.FC<CellActionProps> = ({ data }) => {
 
   const onConfirm = async () => {
     try {
-      // await DiscussionMessagesService.delete(data.id);
+      await DiscussionMessagesService.delete(data.id);
+      toast.success('Discussion deleted successfully');
       router.refresh();
     } catch (error) {
+      toast.error('Failed to delete discussion');
     } finally {
       setOpen(false);
     }

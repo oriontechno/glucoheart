@@ -7,6 +7,14 @@ export class DiscussionMessagesService {
     } catch (error) {}
   }
 
+  static async delete(discussionId: number) {
+    try {
+      await api.delete(`/discussion/rooms/${discussionId}`);
+    } catch (error) {
+      throw new Error('Failed to delete discussion');
+    }
+  }
+
   static async getDiscussionMessages(discussionId: number) {
     try {
       const response = await api.get(
