@@ -16,13 +16,12 @@ import {
   createRoomSchema,
   updateRoomSchema,
   discussionSendMessageSchema,
-  type CreateRoomDto,
-  type UpdateRoomDto,
   type DiscussionSendMessageDto,
 } from './schema/discussion.schema';
 import { Request } from 'express';
 import { RequestUser } from './types';
-
+import { CreateRoomDto } from './dto/create-room.dto';
+import { UpdateRoomDto } from './dto/update-room.dto';
 @Controller('discussion')
 export class DiscussionController {
   constructor(private readonly svc: DiscussionService) {}
@@ -81,7 +80,6 @@ export class DiscussionController {
 
   // Create public room (ADMIN only)
   @Post('rooms')
-  @ZodValidation(createRoomSchema)
   async createRoom(
     @Req() req: Request & { user: RequestUser },
     @Body() dto: CreateRoomDto,
@@ -91,7 +89,6 @@ export class DiscussionController {
   }
 
   @Patch('rooms/:roomId')
-  @ZodValidation(updateRoomSchema)
   async updateRoom(
     @Req() req: Request & { user: RequestUser },
     @Param('roomId', ParseIntPipe) roomId: number,
