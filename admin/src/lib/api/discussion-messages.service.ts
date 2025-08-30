@@ -15,6 +15,25 @@ export class DiscussionMessagesService {
     }
   }
 
+  static async update(discussionId: number, data: any) {
+    try {
+      const response = await api.patch(
+        `/discussion/rooms/${discussionId}`,
+        data
+      );
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to update discussion',
+        data: null
+      };
+    }
+  }
+
   static async getDiscussionMessages(discussionId: number) {
     try {
       const response = await api.get(

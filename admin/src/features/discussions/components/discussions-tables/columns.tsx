@@ -5,10 +5,11 @@ import { Text } from 'lucide-react';
 import { CellAction } from './cell-action';
 import { Discussion } from '@/types/chat';
 import { Badge } from '@/components/ui/badge';
+import { DISCUSSION_IS_PUBLIC_OPTIONS } from './options';
 
 export const columns: ColumnDef<Discussion>[] = [
   {
-    id: 'topic',
+    id: 'search',
     accessorKey: 'topic',
     header: ({ column }: { column: Column<Discussion, unknown> }) => (
       <DataTableColumnHeader column={column} title='Name' />
@@ -37,7 +38,7 @@ export const columns: ColumnDef<Discussion>[] = [
     enableSorting: true
   },
   {
-    id: 'is_public',
+    id: 'isPublic',
     accessorKey: 'is_public',
     header: ({ column }: { column: Column<Discussion, unknown> }) => (
       <DataTableColumnHeader column={column} title='Is Public' />
@@ -52,7 +53,9 @@ export const columns: ColumnDef<Discussion>[] = [
       </div>
     ),
     meta: {
-      label: 'Is Public'
+      label: 'Is Public',
+      options: DISCUSSION_IS_PUBLIC_OPTIONS,
+      variant: 'select'
     },
     enableColumnFilter: true,
     enableSorting: true

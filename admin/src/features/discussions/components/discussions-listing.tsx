@@ -11,6 +11,7 @@ export default async function DiscussionsListingPage({}: DiscussionsListingPageP
   // Showcasing the use of search params cache in nested RSCs
   const page = searchParamsCache.get('page');
   const search = searchParamsCache.get('search');
+  const isPublic = searchParamsCache.get('isPublic');
   const pageLimit = searchParamsCache.get('perPage');
   const sort = searchParamsCache.get('sort');
 
@@ -18,6 +19,7 @@ export default async function DiscussionsListingPage({}: DiscussionsListingPageP
     page,
     limit: pageLimit,
     ...(search && { search }),
+    ...(isPublic && { isPublic }),
     ...(sort && { sort })
   };
 

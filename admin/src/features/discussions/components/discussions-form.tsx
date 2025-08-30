@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { Discussion } from '@/types/chat';
 import { DiscussionMessagesService } from '@/lib/api/discussion-messages.service';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { toast } from 'sonner';
 
 const formSchema = z.object({
   topic: z.string().min(2, {
@@ -40,7 +41,7 @@ export default function DiscussionsForm({
   const defaultValues = {
     topic: initialData?.topic || '',
     description: initialData?.description || '',
-    isPublic: initialData?.isPublic || true
+    isPublic: initialData?.isPublic || false
   };
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -56,15 +57,14 @@ export default function DiscussionsForm({
 
     try {
       if (initialData?.id) {
-        // const result = await DiscussionMessagesService.update(
-        //   initialData.id,
-        //   articleData
-        // );
+        await DiscussionMessagesService.update(initialData.id, discussionData);
+        toast.success('Discussion updated successfully');
       } else {
-        const result = await DiscussionMessagesService.create(discussionData);
+        await DiscussionMessagesService.create(discussionData);
+        toast.success('Discussion created successfully');
       }
 
-      // Redirect to article categories list page
+      // Redirect to discussion categories list page
       router.push('/dashboard/discussions');
     } catch (error) {
       // You can add error handling here (toast notification, etc)

@@ -21,6 +21,27 @@ export class DiscussionServerService {
     };
   }
 
+  static async getDiscussionById(discussionId: number) {
+    try {
+      const authConfig = await this.getAuthenticatedRequest();
+
+      const response = await api.get(`/discussion/rooms/${discussionId}`, {
+        ...authConfig
+      });
+
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        error: error.message || 'Failed to fetch discussion',
+        data: null
+      };
+    }
+  }
+
   static async getCurrentUser() {
     try {
       const session = await getIronSession<SessionData>(

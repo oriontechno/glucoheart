@@ -1,4 +1,4 @@
-export const ARTICLE_CATEGORY_OPTIONS = [
-  { value: 'hipertensi', label: 'Hipertensi' },
-  { value: 'kardiovaskular', label: 'Kardiovaskular' }
+export const DISCUSSION_IS_PUBLIC_OPTIONS = [
+  { value: 'true', label: 'Yes' },
+  { value: 'false', label: 'No' }
 ];

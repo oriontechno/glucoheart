@@ -12,6 +12,9 @@ export const searchParams = {
   // Health metrics fields
   userId: parseAsString,
 
+  // Discussion fields
+  isPublic: parseAsString,
+
   // User search fields
   search: parseAsString, // General search parameter for all columns
   firstName: parseAsString,
