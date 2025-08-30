@@ -5,6 +5,7 @@ export interface Discussion {
   topic: string;
   description?: string;
   is_public?: boolean;
+  isPublic?: boolean;
   created_by: number;
   created_at: string;
   updated_at: string;

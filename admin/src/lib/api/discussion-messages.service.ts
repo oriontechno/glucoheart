@@ -1,6 +1,12 @@
 import api from '../axios';
 
 export class DiscussionMessagesService {
+  static async create(data: any) {
+    try {
+      const response = await api.post(`/discussion/rooms`, data);
+    } catch (error) {}
+  }
+
   static async getDiscussionMessages(discussionId: number) {
     try {
       const response = await api.get(

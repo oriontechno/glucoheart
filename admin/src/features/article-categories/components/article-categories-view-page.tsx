@@ -8,19 +8,19 @@ import { articleCategoriesService } from '@/lib/api/article-categories.service';
 import { ArticleCategoriesServerService } from '@/lib/api/articles-categories.server.service';
 
 type TArticleCategoryViewPageProps = {
-  articleCategoryId: number | string;
+  discussionId: number | string;
 };
 
 export default async function ArticleCategoriesViewPage({
-  articleCategoryId
+  discussionId
 }: TArticleCategoryViewPageProps) {
   let articleCategory = null;
   let pageTitle = 'Create New Article';
 
-  if (articleCategoryId !== 'new') {
+  if (discussionId !== 'new') {
     try {
       const data = await ArticleCategoriesServerService.getArticleCategoryById(
-        Number(articleCategoryId)
+        Number(discussionId)
       );
 
       if (data.success && data.data) {
