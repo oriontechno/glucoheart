@@ -534,6 +534,8 @@ export class DiscussionService {
           isPublic: dto.isPublic,
         })
         .where(eq(discussionRooms.id, roomId));
+
+      return this.getRoomById(roomId);
     } catch (error) {
       throw new InternalServerErrorException(
         'Failed to update discussion room',
