@@ -116,6 +116,11 @@ export class DiscussionController {
     return this.svc.listRooms();
   }
 
+  @Get('rooms/:id')
+  async getRoomById(@Param('id', ParseIntPipe) id: number) {
+    return this.svc.getRoomById(id);
+  }
+
   // Send / Fetch messages
   @Post('rooms/:roomId/message')
   // @ZodValidation(discussionSendMessageSchema)
