@@ -755,4 +755,127 @@ export class DiscussionService {
       senderAvatar: row.profilePicture || undefined,
     };
   }
+
+  /** Ambil detail 1 room publik berdasarkan ID. */
+  async getRoomById(roomId: number) {
+    if (!Number.isInteger(roomId)) {
+      throw new BadRequestException('Invalid room id');
+    }
+
+    // 1) data room + info pembuat (bisa null jika user terhapus)
+    const [roomRow] = await this.db
+      .select({
+        id: discussionRooms.id,
+        topic: discussionRooms.topic,
+        description: discussionRooms.description,
+        isPublic: discussionRooms.isPublic,
+        createdAt: discussionRooms.createdAt,
+        updatedAt: discussionRooms.updatedAt,
+        lastMessageId: discussionRooms.lastMessageId,
+        lastMessageAt: discussionRooms.lastMessageAt,
+        createdBy: discussionRooms.createdBy,
+
+        creatorFirstName: users.firstName,
+        creatorLastName: users.lastName,
+        creatorAvatar: users.profilePicture,
+        creatorId: users.id, // bisa null kalau createdBy null
+      })
+      .from(discussionRooms)
+      .leftJoin(users, eq(users.id, discussionRooms.createdBy))
+      .where(eq(discussionRooms.id, roomId))
+      .limit(1);
+
+    if (!roomRow) {
+      throw new NotFoundException('Discussion room not found');
+    }
+
+    // 2) statistik: jumlah pesan & peserta
+    const [{ c: messageCount }] = await this.db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(discussionMessages)
+      .where(eq(discussionMessages.roomId, roomId));
+
+    const [{ c: participantCount }] = await this.db
+      .select({ c: sql<number>`count(*)::int` })
+      .from(discussionParticipants)
+      .where(eq(discussionParticipants.roomId, roomId));
+
+    // 3) ringkas last message (jika ada)
+    let lastMessage: {
+      id: number;
+      content: string;
+      createdAt: Date;
+      sender: {
+        id: number;
+        firstName: string | null;
+        lastName: string | null;
+        profilePicture: string | null;
+        role: string | null;
+      };
+    } | null = null;
+
+    if (roomRow.lastMessageId) {
+      const [m] = await this.db
+        .select({
+          id: discussionMessages.id,
+          content: discussionMessages.content,
+          createdAt: discussionMessages.createdAt,
+
+          senderId: discussionMessages.senderId,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profilePicture: users.profilePicture,
+          role: users.role as any,
+        })
+        .from(discussionMessages)
+        .leftJoin(users, eq(users.id, discussionMessages.senderId))
+        .where(eq(discussionMessages.id, roomRow.lastMessageId))
+        .limit(1);
+
+      if (m) {
+        lastMessage = {
+          id: m.id,
+          content: m.content,
+          createdAt: m.createdAt,
+          sender: {
+            id: m.senderId,
+            firstName: m.firstName ?? null,
+            lastName: m.lastName ?? null,
+            profilePicture: m.profilePicture ?? null,
+            role: (m.role as any) ?? null,
+          },
+        };
+      }
+    }
+
+    // 4) bentuk respons final
+    return {
+      id: roomRow.id,
+      topic: roomRow.topic,
+      description: roomRow.description,
+      isPublic: !!roomRow.isPublic,
+
+      createdAt: roomRow.createdAt,
+      updatedAt: roomRow.updatedAt,
+
+      lastMessageId: roomRow.lastMessageId ?? null,
+      lastMessageAt: roomRow.lastMessageAt ?? null,
+      lastMessage,
+
+      createdBy: roomRow.createdBy ?? null,
+      creator: roomRow.creatorId
+        ? {
+            id: roomRow.creatorId,
+            firstName: roomRow.creatorFirstName ?? null,
+            lastName: roomRow.creatorLastName ?? null,
+            profilePicture: roomRow.creatorAvatar ?? null,
+          }
+        : null,
+
+      stats: {
+        messageCount,
+        participantCount,
+      },
+    };
+  }
 }
