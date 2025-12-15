@@ -3,30 +3,42 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 // Define the base Next.js configuration
 const baseConfig: NextConfig = {
+  // 1. Fitur Rewrites (Proxy)
+  // Ini membuat request ke /api/proxy/... di Vercel diteruskan ke VPS
+  async rewrites() {
+    return [
+      {
+        source: '/api/proxy/:path*',
+        destination: 'http://195.88.211.54/:path*',
+      },
+    ];
+  },
+
   images: {
     remotePatterns: [
       {
         protocol: 'https',
         hostname: 'api.slingacademy.com',
-        port: ''
+        port: '',
       },
       {
         protocol: 'http',
-        hostname: 'localhost'
+        hostname: 'localhost',
       },
       {
         protocol: 'https',
-        hostname: '*'
+        hostname: '*',
       },
       {
+        // Update IP VPS agar gambar dari backend bisa diload
         protocol: 'http',
-        hostname: '195.88.211.126',
+        hostname: '195.88.211.54',
         port: '3001',
-        pathname: '/uploads/articles/**'
-      }
-    ]
+        pathname: '/uploads/**',
+      },
+    ],
   },
-  transpilePackages: ['geist']
+  transpilePackages: ['geist'],
 };
 
 let configWithPlugins = baseConfig;
@@ -50,7 +62,7 @@ if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
 
     // Upload a larger set of source maps for prettier stack traces (increases build time)
     reactComponentAnnotation: {
-      enabled: true
+      enabled: true,
     },
 
     // Route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
@@ -63,7 +75,7 @@ if (!process.env.NEXT_PUBLIC_SENTRY_DISABLED) {
     disableLogger: true,
 
     // Disable Sentry telemetry
-    telemetry: false
+    telemetry: false,
   });
 }
 
