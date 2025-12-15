@@ -10,11 +10,19 @@ async function bootstrap() {
   app.use('/uploads', express.static(uploadsDir));
 
   app.enableCors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://glucoheart.vercel.app',
-    ],
+    origin: function (origin, callback) {
+      // Izinkan request tanpa origin
+      if (!origin) return callback(null, true);
+      
+      // Izinkan Localhost
+      if (origin.includes('localhost')) return callback(null, true);
+
+      // Izinkan semua subdomain vercel (.vercel.app)
+      if (origin.endsWith('.vercel.app')) return callback(null, true);
+
+      // Block sisanya
+      callback(new Error('Not allowed by CORS'));
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
