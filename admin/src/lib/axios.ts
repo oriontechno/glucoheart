@@ -1,16 +1,24 @@
 import axios from 'axios';
 import { tokenService } from './api/token.service';
-import { config } from '@/config/env';
+
+// 1. TENTUKAN BASE URL SECARA DINAMIS
+// Jika di Server (Window undefined) -> Pakai BACKEND_URL (IP VPS)
+// Jika di Client (Browser) -> Pakai API_URL (/api/proxy)
+const baseURL = typeof window === 'undefined'
+  ? process.env.NEXT_PUBLIC_BACKEND_URL 
+  : process.env.NEXT_PUBLIC_API_URL;
 
 const api = axios.create({
-  baseURL: `${config.API_URL}`,
-  headers: {}
+  baseURL: baseURL, 
+  headers: {
+    'Content-Type': 'application/json',
+  }
 });
 
-// Request interceptor to add token to headers
+// Request interceptor
 api.interceptors.request.use(
   async (config) => {
-    // Skip token for auth endpoints to avoid circular calls
+    // Skip token for auth endpoints
     if (
       config.url?.includes('/auth/login') ||
       config.url?.includes('/auth/register')
@@ -33,34 +41,27 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle token expiration
+// Response interceptor
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   async (error) => {
-    if (error.response?.status === 401) {
-      // Token expired or invalid
+    // Logic refresh token hanya jalan di client side
+    if (typeof window !== 'undefined' && error.response?.status === 401) {
       tokenService.clearToken();
-
-      // Only try to refresh token on client-side
-      if (typeof window !== 'undefined') {
-        // Try to refresh token once
-        const newToken = await tokenService.refreshToken();
-        if (newToken && error.config && !error.config._retry) {
-          error.config._retry = true;
-          error.config.headers.Authorization = `Bearer ${newToken}`;
-          return api.request(error.config);
-        }
-
-        // If refresh failed, redirect to login
-        window.location.href = '/auth/sign-in';
+      
+      const newToken = await tokenService.refreshToken();
+      if (newToken && error.config && !error.config._retry) {
+        error.config._retry = true;
+        error.config.headers.Authorization = `Bearer ${newToken}`;
+        return api.request(error.config);
       }
+      
+      window.location.href = '/auth/sign-in';
     }
     return Promise.reject(error);
   }
 );
-
-// Remove the getTokenFromSession function since we're using tokenService now
 
 export default api;
