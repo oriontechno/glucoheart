@@ -34,40 +34,41 @@ export function useWebSocket({
   useEffect(() => {
     if (!enabled) return;
 
+    // Bersihkan socket lama jika ada
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+
     const connectSocket = async () => {
       try {
-        const tokenResponse = await fetch('/api/auth/websocket-token', {
-          credentials: 'include'
-        });
-
-        if (!tokenResponse.ok) {
-          throw new Error('Failed to get websocket token');
-        }
-
+        const tokenResponse = await fetch('/api/auth/websocket-token');
+        if (!tokenResponse.ok) throw new Error('Failed to get token');
         const { token } = await tokenResponse.json();
 
         const socket = io('/chat', {
-          path: '/socket.io', // Default path, harus sesuai dengan rewrite di next.config
+          path: '/socket.io', 
           auth: { token },
-          transports: ['websocket', 'polling'], // Tambahkan polling sebagai fallback jika websocket gagal di proxy
+          transports: ['polling', 'websocket'], 
+          withCredentials: true,
           forceNew: true,
-          reconnectionAttempts: 5
+          reconnection: true,
+          reconnectionAttempts: 10,
+          reconnectionDelay: 1000,
         });
 
         socket.on('connect', () => {
-          console.log('✅ Connected to Chat WebSocket via Proxy');
+          console.log('✅ Connected to Chat Socket via Vercel Proxy');
           setIsConnected(true);
           setError(null);
         });
 
-        socket.on('disconnect', (reason) => {
-          console.log('❌ Disconnected:', reason);
+        socket.on('connect_error', (err) => {
+          console.warn('⚠️ Socket connection attempt failed:', err.message);
           setIsConnected(false);
         });
 
-        socket.on('connect_error', (err) => {
-          console.error('⚠️ Connection Error:', err.message);
-          setError(err.message);
+        socket.on('disconnect', (reason) => {
+          console.log('🔌 Socket Disconnected:', reason);
           setIsConnected(false);
         });
 
@@ -82,7 +83,6 @@ export function useWebSocket({
         socketRef.current = socket;
       } catch (err) {
         console.error('❌ Socket initialization error:', err);
-        setError(err instanceof Error ? err.message : 'Connection failed');
       }
     };
 
@@ -97,9 +97,7 @@ export function useWebSocket({
   }, [enabled]);
 
   const joinSession = async (sessionId: number) => {
-    if (!socketRef.current || !isConnected) {
-      return false;
-    }
+    if (!socketRef.current?.connected) return false;
     try {
       const response = await socketRef.current.emitWithAck('session.join', { sessionId });
       if (response.ok) {
@@ -114,19 +112,13 @@ export function useWebSocket({
   };
 
   const leaveSession = async (sessionId: number) => {
-    if (!socketRef.current || !isConnected) return;
-    try {
-      await socketRef.current.emitWithAck('session.leave', { sessionId });
-      if (currentSessionId === sessionId) {
-        setCurrentSessionId(null);
-      }
-    } catch (error) {
-      console.error('Error leaving session:', error);
-    }
+    if (!socketRef.current?.connected) return;
+    socketRef.current.emit('session.leave', { sessionId });
+    if (currentSessionId === sessionId) setCurrentSessionId(null);
   };
 
   const sendMessage = async (sessionId: number, content: string) => {
-    if (!socketRef.current || !isConnected) return false;
+    if (!socketRef.current?.connected) return false;
     try {
       const response = await socketRef.current.emitWithAck('message.send', {
         sessionId,
@@ -139,12 +131,5 @@ export function useWebSocket({
     }
   };
 
-  return {
-    isConnected,
-    error,
-    joinSession,
-    leaveSession,
-    sendMessage,
-    currentSessionId
-  };
+  return { isConnected, error, joinSession, leaveSession, sendMessage, currentSessionId };
 }
