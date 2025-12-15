@@ -2,7 +2,6 @@
 
 import { io, Socket } from 'socket.io-client';
 import { DiscussionMessage } from '@/types/chat';
-import { config } from '@/config/env';
 
 export interface DiscussionWebSocketMessage {
   id: number;
@@ -26,8 +25,8 @@ export class DiscussionWebSocketService {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
-  private isReady = false; // Add ready state flag
-  private processedMessageIds = new Set<number>(); // Track processed messages
+  private isReady = false;
+  private processedMessageIds = new Set<number>();
 
   constructor(
     private token: string,
@@ -41,8 +40,9 @@ export class DiscussionWebSocketService {
   private connect() {
     if (this.socket?.connected) return;
 
-    this.socket = io(`${config.NEXT_PUBLIC_BACKEND_URL}/discussion`, {
-      transports: ['websocket'],
+    this.socket = io('/discussion', {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
       auth: {
         token: this.token
       },
@@ -51,9 +51,8 @@ export class DiscussionWebSocketService {
     });
 
     this.socket.on('connect', () => {
+      console.log('✅ Connected to Discussion WebSocket via Proxy');
       this.reconnectAttempts = 0;
-
-      // Set ready flag after a small delay to ensure socket is fully initialized
       setTimeout(() => {
         this.isReady = true;
         this.onConnectionChange?.(true);
@@ -63,13 +62,9 @@ export class DiscussionWebSocketService {
     this.socket.on('disconnect', (reason) => {
       this.isReady = false;
       this.onConnectionChange?.(false);
-
-      if (reason === 'io server disconnect') {
-        // Server initiated disconnect, don't reconnect
-        return;
+      if (reason !== 'io server disconnect') {
+        this.handleReconnect();
       }
-
-      this.handleReconnect();
     });
 
     this.socket.on('connect_error', (error) => {
@@ -79,35 +74,22 @@ export class DiscussionWebSocketService {
       this.handleReconnect();
     });
 
-    // Additional error handling for auth failures
     this.socket.on('error', (error) => {
       console.error('❌ Discussion WebSocket error:', error);
     });
 
-    this.socket.on('auth_error', (error) => {
-      console.error('❌ Discussion WebSocket auth error:', error);
-    });
-
-    // Listen for new messages
     this.socket.on(
       'discussion.message.new',
       (data: DiscussionWebSocketMessage) => {
-        // Check for duplicate messages
-        if (this.processedMessageIds.has(data.id)) {
-          return;
-        }
-
-        // Add message ID to processed set
+        if (this.processedMessageIds.has(data.id)) return;
         this.processedMessageIds.add(data.id);
 
-        // Clean up old message IDs (keep only last 500 messages)
         if (this.processedMessageIds.size > 500) {
           const idsArray = Array.from(this.processedMessageIds);
           const oldIds = idsArray.slice(0, idsArray.length - 500);
           oldIds.forEach((id) => this.processedMessageIds.delete(id));
         }
 
-        // Convert websocket message format to DiscussionMessage format
         const discussionMessage: DiscussionMessage = {
           id: data.id,
           discussion_id: data.roomId,
@@ -129,47 +111,34 @@ export class DiscussionWebSocketService {
       }
     );
 
-    // Listen for room updates (for discussion list)
     this.socket.on('discussion.room.updated', (data: any) => {
       this.onRoomUpdate?.(data);
     });
   }
 
   private handleReconnect() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('Max reconnection attempts reached');
-      return;
-    }
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-
     setTimeout(() => {
       this.connect();
     }, delay);
   }
 
   joinRoom(roomId: number): Promise<any> {
-    // Backend automatically joins public room on connection
-    // No manual room subscription needed
     return Promise.resolve({ ok: true });
   }
 
   leaveRoom(roomId: number): Promise<void> {
-    // Backend automatically manages room membership via public feed
-    // No manual unsubscribe needed
     return Promise.resolve();
   }
 
   joinLobby(): Promise<any> {
-    // Backend automatically joins all logged-in users to public discussion feed
-    // No manual lobby join needed
     return Promise.resolve({ ok: true });
   }
 
   leaveLobby(): Promise<void> {
-    // Backend automatically manages lobby membership
-    // No manual lobby leave needed
     return Promise.resolve();
   }
 
@@ -186,10 +155,6 @@ export class DiscussionWebSocketService {
           if (response?.ok) {
             resolve(response);
           } else {
-            console.error(
-              `❌ Failed to send message to discussion room ${roomId}:`,
-              response?.error
-            );
             reject(new Error(response?.error || 'Failed to send message'));
           }
         }
@@ -207,7 +172,6 @@ export class DiscussionWebSocketService {
       this.socket.disconnect();
       this.socket = null;
     }
-    // Clear processed message IDs on disconnect
     this.processedMessageIds.clear();
   }
 }

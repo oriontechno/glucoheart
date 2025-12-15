@@ -3,10 +3,13 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 const baseConfig: NextConfig = {
   trailingSlash: false,
-
-  // Konfigurasi Proxy
+  
   async rewrites() {
     return [
+      {
+        source: '/socket.io/:path*',
+        destination: 'http://195.88.211.54/socket.io/:path*', 
+      },
       {
         source: '/api/proxy/:path*',
         destination: 'http://195.88.211.54/:path*', 
@@ -39,7 +42,6 @@ const baseConfig: NextConfig = {
   transpilePackages: ['geist'],
 };
 
-// Ekspor config dengan Sentry
 export default withSentryConfig(baseConfig, {
   org: process.env.NEXT_PUBLIC_SENTRY_ORG,
   project: process.env.NEXT_PUBLIC_SENTRY_PROJECT,

@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { Message } from '@/types/chat';
-import { config } from '@/config/env';
 
 interface UseWebSocketOptions {
   enabled?: boolean;
@@ -21,11 +20,9 @@ export function useWebSocket({
   const socketRef = useRef<Socket | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
 
-  // Use refs to store the latest callback functions to avoid re-creating socket connection
   const onNewMessageRef = useRef(onNewMessage);
   const onSessionUpdateRef = useRef(onSessionUpdate);
 
-  // Update refs when callbacks change
   useEffect(() => {
     onNewMessageRef.current = onNewMessage;
   }, [onNewMessage]);
@@ -39,7 +36,6 @@ export function useWebSocket({
 
     const connectSocket = async () => {
       try {
-        // Get token from iron session
         const tokenResponse = await fetch('/api/auth/websocket-token', {
           credentials: 'include'
         });
@@ -50,40 +46,42 @@ export function useWebSocket({
 
         const { token } = await tokenResponse.json();
 
-        // Create socket connection
-        const socket = io(`${config.NEXT_PUBLIC_BACKEND_URL}/chat`, {
+        const socket = io('/chat', {
+          path: '/socket.io', // Default path, harus sesuai dengan rewrite di next.config
           auth: { token },
-          transports: ['websocket'],
-          forceNew: true
+          transports: ['websocket', 'polling'], // Tambahkan polling sebagai fallback jika websocket gagal di proxy
+          forceNew: true,
+          reconnectionAttempts: 5
         });
 
         socket.on('connect', () => {
+          console.log('✅ Connected to Chat WebSocket via Proxy');
           setIsConnected(true);
           setError(null);
         });
 
         socket.on('disconnect', (reason) => {
+          console.log('❌ Disconnected:', reason);
           setIsConnected(false);
         });
 
-        socket.on('error', (err) => {
-          setError(err);
+        socket.on('connect_error', (err) => {
+          console.error('⚠️ Connection Error:', err.message);
+          setError(err.message);
           setIsConnected(false);
         });
 
-        // Listen for new messages
         socket.on('message.new', (message: Message) => {
           onNewMessageRef.current?.(message);
         });
 
-        // Listen for session updates
         socket.on('session.nurseAssigned', (data) => {
           onSessionUpdateRef.current?.(data);
         });
 
         socketRef.current = socket;
       } catch (err) {
-        console.error('❌ Socket connection error:', err);
+        console.error('❌ Socket initialization error:', err);
         setError(err instanceof Error ? err.message : 'Connection failed');
       }
     };
@@ -96,25 +94,19 @@ export function useWebSocket({
         socketRef.current = null;
       }
     };
-  }, [enabled]); // Remove onNewMessage and onSessionUpdate from dependencies
+  }, [enabled]);
 
   const joinSession = async (sessionId: number) => {
     if (!socketRef.current || !isConnected) {
-      console.warn('Socket not connected, cannot join session');
       return false;
     }
-
     try {
-      const response = await socketRef.current.emitWithAck('session.join', {
-        sessionId
-      });
+      const response = await socketRef.current.emitWithAck('session.join', { sessionId });
       if (response.ok) {
         setCurrentSessionId(sessionId);
         return true;
-      } else {
-        console.warn('Failed to join session:', response.error);
-        return false;
       }
+      return false;
     } catch (error) {
       console.error('Error joining session:', error);
       return false;
@@ -123,7 +115,6 @@ export function useWebSocket({
 
   const leaveSession = async (sessionId: number) => {
     if (!socketRef.current || !isConnected) return;
-
     try {
       await socketRef.current.emitWithAck('session.leave', { sessionId });
       if (currentSessionId === sessionId) {
@@ -135,22 +126,13 @@ export function useWebSocket({
   };
 
   const sendMessage = async (sessionId: number, content: string) => {
-    if (!socketRef.current || !isConnected) {
-      console.warn('Cannot send message: Socket not connected');
-      return false;
-    }
-
+    if (!socketRef.current || !isConnected) return false;
     try {
       const response = await socketRef.current.emitWithAck('message.send', {
         sessionId,
         content
       });
-      if (response.ok) {
-        return response.message;
-      } else {
-        console.error('Failed to send message:', response.error);
-        return false;
-      }
+      return response.ok ? response.message : false;
     } catch (error) {
       console.error('Error sending message:', error);
       return false;
